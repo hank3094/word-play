@@ -91,6 +91,7 @@
     document.getElementById("wordle-game").addEventListener("click", (e) => {
       if (e.target.closest('[data-nav="leave"]')) {
         Net.send("leave_game");
+        Wordle.reset();
         show("lobby");
       }
     });
@@ -122,7 +123,10 @@
 
     Net.on("feed", (m) => Wordle.onFeed(m.event));
     Net.on("rejected", () => Wordle.onRejected());
-    Net.on("left", () => show("lobby"));
+    Net.on("left", () => {
+      Wordle.reset();
+      show("lobby");
+    });
   }
 
   // ---- physical keyboard ----

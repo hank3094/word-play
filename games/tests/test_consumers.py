@@ -30,11 +30,14 @@ def fixed_answer(monkeypatch):
     return "crane"
 
 
-async def _connect(name):
+async def _connect(name, cid=None):
     comm = WebsocketCommunicator(PlayConsumer.as_asgi(), "/ws/play/")
     connected, _ = await comm.connect()
     assert connected
-    await comm.send_json_to({"type": "hello", "name": name})
+    hello = {"type": "hello", "name": name}
+    if cid:
+        hello["cid"] = cid
+    await comm.send_json_to(hello)
     return comm
 
 
@@ -128,6 +131,24 @@ async def test_rejected_guess_only_notifies_sender(fixed_answer):
         assert rejected["reason"] == "unknown"
     finally:
         await a.disconnect()
+
+
+async def test_same_client_id_is_one_player_and_survives_one_drop():
+    # Two connections sharing a stable client id (a refresh overlap / second tab) are one player;
+    # closing one keeps the player present.
+    a1 = await _connect("ANA", cid="cid-ana")
+    a2 = await _connect("ANA", cid="cid-ana")
+    b = await _connect("BOB")
+    try:
+        lobby = await _recv_until(b, "lobby")
+        anas = [p for p in lobby["players"] if p["name"] == "ANA"]
+        assert len(anas) == 1
+        await a1.disconnect()  # one of ANA's connections drops
+        lobby2 = await _recv_until(b, "lobby")
+        assert "ANA" in {p["name"] for p in lobby2["players"]}  # still here
+    finally:
+        await a2.disconnect()
+        await b.disconnect()
 
 
 async def test_disconnect_removes_from_lobby():

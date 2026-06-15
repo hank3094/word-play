@@ -23,6 +23,14 @@ const Wordle = (() => {
     typingPeer = null;
   }
 
+  function reset() {
+    gid = null;
+    snap = null;
+    buffer = "";
+    prevRows = 0;
+    typingPeer = null;
+  }
+
   function board() {
     return snap ? snap.board : null;
   }
@@ -148,6 +156,7 @@ const Wordle = (() => {
   return {
     init,
     open,
+    reset,
     applySnapshot,
     onFeed,
     input,

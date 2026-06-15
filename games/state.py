@@ -31,8 +31,12 @@ GAME_TTL = 6 * 3600  # abandoned games self-expire after a few hours
 FEED_MAX = 30  # keep the last N durable feed events per game
 
 
-def _pkey(pid: str) -> str:
-    return f"wp:player:{pid}"
+def _nkey(pid: str) -> str:
+    return f"wp:pname:{pid}"
+
+
+def _ckey(pid: str) -> str:
+    return f"wp:pconn:{pid}"
 
 
 def _gkey(gid: str) -> str:
@@ -40,27 +44,36 @@ def _gkey(gid: str) -> str:
 
 
 # --- presence --------------------------------------------------------------------------------
+# A player is identified by a stable per-browser id (``pid``, persisted in localStorage), NOT by a
+# per-connection id. So a refresh — or a second tab — re-uses the same presence slot instead of
+# spawning a duplicate. ``wp:pconn:<pid>`` counts live connections for that player; presence (and
+# game membership) is only torn down when the count hits zero. A short TTL on both keys is the
+# crash backstop: if every connection dies without a clean disconnect, the entry self-heals out of
+# the set within ALIVE_TTL.
 
 
 async def register(pid: str, name: str) -> None:
     r = get_client()
     name = (name or "PLAYER")[:16]
     await r.sadd(PLAYERS_SET, pid)
-    await r.set(_pkey(pid), name, ex=ALIVE_TTL)
+    await r.set(_nkey(pid), name, ex=ALIVE_TTL)
+    await r.incr(_ckey(pid))
+    await r.expire(_ckey(pid), ALIVE_TTL)
 
 
 async def touch(pid: str) -> None:
     """Refresh a player's liveness TTL (called on every inbound message)."""
     r = get_client()
-    if await r.exists(_pkey(pid)):
-        await r.expire(_pkey(pid), ALIVE_TTL)
+    if await r.exists(_nkey(pid)):
+        await r.expire(_nkey(pid), ALIVE_TTL)
+        await r.expire(_ckey(pid), ALIVE_TTL)
 
 
 async def set_name(pid: str, name: str) -> list[str]:
     """Rename a player everywhere (presence + any games they're in). Returns affected game ids."""
     r = get_client()
     name = (name or "PLAYER")[:16]
-    await r.set(_pkey(pid), name, ex=ALIVE_TTL)
+    await r.set(_nkey(pid), name, ex=ALIVE_TTL)
     await r.sadd(PLAYERS_SET, pid)
     affected = []
     for gid in await r.smembers(GAMES_SET):
@@ -73,10 +86,16 @@ async def set_name(pid: str, name: str) -> list[str]:
 
 
 async def unregister(pid: str) -> list[str]:
-    """Remove a player from presence and every game. Returns affected game ids."""
+    """Drop one connection for a player. Only when the last connection goes does the player leave
+    presence and every game (so a refresh / second tab doesn't evict them). Returns affected game
+    ids (empty while other connections remain)."""
     r = get_client()
+    remaining = await r.decr(_ckey(pid))
+    if remaining > 0:
+        return []
     await r.srem(PLAYERS_SET, pid)
-    await r.delete(_pkey(pid))
+    await r.delete(_nkey(pid))
+    await r.delete(_ckey(pid))
     affected = []
     for gid in list(await r.smembers(GAMES_SET)):
         if await leave_game(pid, gid):
@@ -89,7 +108,7 @@ async def players_snapshot() -> list[dict]:
     r = get_client()
     out = []
     for pid in sorted(await r.smembers(PLAYERS_SET)):
-        name = await r.get(_pkey(pid))
+        name = await r.get(_nkey(pid))
         if name is None:
             await r.srem(PLAYERS_SET, pid)  # TTL lapsed -> gone
             continue

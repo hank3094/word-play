@@ -51,17 +51,22 @@ def _save_finished(result: dict, game_type: str) -> None:
 
 class PlayConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
+        # A provisional id until ``hello`` supplies the stable client id; ``registered`` guards
+        # teardown so a socket that never said hello doesn't decrement a phantom connection.
         self.pid = uuid.uuid4().hex[:8]
         self.name = "PLAYER"
+        self.registered = False
         self.current_game: str | None = None
         await self.accept()
         await self.channel_layer.group_add(LOBBY, self.channel_name)
 
     async def disconnect(self, code):
-        affected = await S.unregister(self.pid)
         await self.channel_layer.group_discard(LOBBY, self.channel_name)
         if self.current_game:
             await self.channel_layer.group_discard(game_group(self.current_game), self.channel_name)
+        if not self.registered:
+            return
+        affected = await S.unregister(self.pid)
         for gid in affected:
             await self._broadcast_game(gid)
         await self._broadcast_lobby()
@@ -83,8 +88,13 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
 
     # --- client messages --------------------------------------------------
     async def _hello(self, content):
+        # Adopt the stable per-browser id so a refresh / second tab is the *same* player.
+        cid = str(content.get("cid") or "").strip()[:32]
+        if cid:
+            self.pid = cid
         self.name = _clean_name(content.get("name"))
         await S.register(self.pid, self.name)
+        self.registered = True
         await self.send_json({"type": "welcome", "id": self.pid, "name": self.name})
         await self._broadcast_lobby()
 

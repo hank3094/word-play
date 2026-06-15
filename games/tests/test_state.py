@@ -33,6 +33,18 @@ async def test_unregister_removes_player():
     assert await state.players_snapshot() == []
 
 
+async def test_multiple_connections_count_as_one_player():
+    # Same stable id connecting twice (e.g. a refresh overlap, or a second tab) is one presence
+    # entry, and survives one of the connections going away.
+    await state.register("cid1", "ANA")
+    await state.register("cid1", "ANA")
+    assert [p["name"] for p in await state.players_snapshot()] == ["ANA"]
+    await state.unregister("cid1")  # one connection drops...
+    assert [p["name"] for p in await state.players_snapshot()] == ["ANA"]  # ...still present
+    await state.unregister("cid1")  # last connection drops
+    assert await state.players_snapshot() == []
+
+
 async def test_create_and_list_game(fixed_answer):
     gid = await state.create_game("wordle", "p1", "ANA")
     games = await state.list_games()
