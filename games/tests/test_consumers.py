@@ -133,6 +133,33 @@ async def test_rejected_guess_only_notifies_sender(fixed_answer):
         await a.disconnect()
 
 
+async def test_owner_deletes_game_and_member_is_bounced(fixed_answer):
+    a = await _connect("ANA", cid="cid-ana")  # owner
+    b = await _connect("BOB", cid="cid-bob")
+    try:
+        await a.send_json_to({"type": "create_game", "gameType": "wordle"})
+        gid = (await _recv_until(a, "game"))["snapshot"]["id"]
+        await b.send_json_to({"type": "open_game", "gameId": gid})
+        await _recv_until(b, "game")
+
+        # A non-owner delete is ignored: the game stays in the lobby.
+        await b.send_json_to({"type": "delete_game", "gameId": gid})
+        await a.send_json_to({"type": "create_game", "gameType": "wordle"})  # force a lobby tick
+        await _recv_until(a, "game")
+        lobby = await _recv_until(a, "lobby")
+        assert any(g["id"] == gid for g in lobby["games"])
+
+        # The owner deletes it: BOB (a member) is bounced, and it leaves the lobby.
+        await a.send_json_to({"type": "delete_game", "gameId": gid})
+        closed = await _recv_until(b, "game_closed")
+        assert closed["gameId"] == gid
+        lobby2 = await _recv_until(a, "lobby")
+        assert not any(g["id"] == gid for g in lobby2["games"])
+    finally:
+        await a.disconnect()
+        await b.disconnect()
+
+
 async def test_same_client_id_is_one_player_and_survives_one_drop():
     # Two connections sharing a stable client id (a refresh overlap / second tab) are one player;
     # closing one keeps the player present.

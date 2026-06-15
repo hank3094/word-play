@@ -140,6 +140,7 @@ async def create_game(
     blob = {
         "id": gid,
         "type": game_type,
+        "owner": pid,  # the creator; only they may delete the game
         "status": "playing",
         "created": time.time(),
         "players": players,
@@ -171,6 +172,15 @@ async def leave_game(pid: str, gid: str) -> bool:
         await _delete(gid)
     else:
         await _save(blob)
+    return True
+
+
+async def delete_game(pid: str, gid: str) -> bool:
+    """Delete a game, but only at the request of its owner. Returns True if it was deleted."""
+    blob = await _load(gid)
+    if not blob or blob.get("owner") != pid:
+        return False
+    await _delete(gid)
     return True
 
 
@@ -234,6 +244,7 @@ def _snapshot(blob: dict) -> dict:
     return {
         "id": blob["id"],
         "gameType": blob["type"],
+        "owner": blob.get("owner"),
         "status": blob["status"],
         "players": [{"id": pid, "name": nm} for pid, nm in blob["players"].items()],
         "feed": blob["feed"],
@@ -258,6 +269,7 @@ async def list_games() -> list[dict]:
             {
                 "id": blob["id"],
                 "gameType": blob["type"],
+                "owner": blob.get("owner"),
                 "status": blob["status"],
                 "count": len(blob["players"]),
                 "players": list(blob["players"].values()),

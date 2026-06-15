@@ -4,6 +4,7 @@
 // the server stays authoritative.
 const Wordle = (() => {
   let els = {};
+  let myId = null;
   let gid = null;
   let snap = null;
   let buffer = "";
@@ -14,6 +15,10 @@ const Wordle = (() => {
   function init(refs) {
     els = refs;
     Board.mount(els.board);
+  }
+
+  function setMyId(id) {
+    myId = id;
   }
 
   function open(gameId) {
@@ -150,11 +155,13 @@ const Wordle = (() => {
     renderPlayers();
     renderStatus();
     renderFeed();
+    if (els.delete) els.delete.hidden = !(snap.owner && snap.owner === myId);
     Keyboard.setHints(board().keyboard);
   }
 
   return {
     init,
+    setMyId,
     open,
     reset,
     applySnapshot,

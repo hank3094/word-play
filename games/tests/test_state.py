@@ -67,6 +67,32 @@ async def test_join_and_leave_game(fixed_answer):
     assert {p["name"] for p in snap2["players"]} == {"ANA"}
 
 
+async def test_create_records_owner(fixed_answer):
+    gid = await state.create_game("wordle", "p1", "ANA")
+    games = await state.list_games()
+    assert games[0]["owner"] == "p1"
+    snap = await state.game_snapshot(gid)
+    assert snap["owner"] == "p1"
+
+
+async def test_owner_can_delete_game(fixed_answer):
+    gid = await state.create_game("wordle", "p1", "ANA")
+    assert await state.delete_game("p1", gid) is True
+    assert await state.list_games() == []
+    assert await state.game_snapshot(gid) is None
+
+
+async def test_non_owner_cannot_delete_game(fixed_answer):
+    gid = await state.create_game("wordle", "p1", "ANA")
+    await state.join_game("p2", gid, "BOB")
+    assert await state.delete_game("p2", gid) is False
+    assert len(await state.list_games()) == 1
+
+
+async def test_delete_missing_game_is_noop():
+    assert await state.delete_game("p1", "nope") is False
+
+
 async def test_apply_guess_changes_state_and_feed(fixed_answer):
     gid = await state.create_game("wordle", "p1", "ANA")
     res = await state.apply_action(gid, "p1", "ANA", "guess", {"word": "slate"})

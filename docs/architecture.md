@@ -41,9 +41,10 @@ module). Read-modify-write of a game blob isn't atomic across awaits — fine fo
 | `hello` | `{name}` | register presence, join the lobby |
 | `set_name` | `{name}` | rename everywhere |
 | `ping` | — | refresh presence TTL |
-| `create_game` | `{gameType}` | make a game and enter it |
+| `create_game` | `{gameType}` | make a game (you become its owner) and enter it |
 | `open_game` | `{gameId}` | join + enter a game |
 | `leave_game` | — | leave the current game |
+| `delete_game` | `{gameId}` | delete a game — **owner only**; members are bounced to the lobby |
 | `game_action` | `{gameId, action, data}` | a move (Wordle: `action` ∈ `typing` \| `guess`) |
 
 **Server → client**
@@ -56,6 +57,10 @@ module). Read-modify-write of a game blob isn't atomic across awaits — fine fo
 | `feed` | `{event}` — transient, currently `{kind:"typing", pid, name, text}` |
 | `rejected` | `{reason}` — an invalid move, sent only to the actor |
 | `left` | — |
+| `game_closed` | `{gameId}` — the owner deleted a game you were in; return to the lobby |
+
+The lobby/game snapshots carry an `owner` (the creator's id), so the client shows a delete control
+only to the owner.
 
 ### Two-tier broadcast
 

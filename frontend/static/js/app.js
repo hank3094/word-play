@@ -58,7 +58,14 @@
         games: document.getElementById("games-list"),
         history: document.getElementById("history-list"),
       },
-      { onOpen: (id) => Net.send("open_game", { gameId: id }) },
+      {
+        onOpen: (id) => Net.send("open_game", { gameId: id }),
+        onDelete: (id) => {
+          if (confirm("Delete this game for everyone?")) {
+            Net.send("delete_game", { gameId: id });
+          }
+        },
+      },
     );
 
     document
@@ -83,6 +90,7 @@
       feed: document.getElementById("wordle-feed"),
       players: document.getElementById("wordle-players"),
       status: document.getElementById("wordle-status"),
+      delete: document.getElementById("wordle-delete"),
     });
     Keyboard.render(document.getElementById("keyboard"), (key) =>
       Wordle.input(key),
@@ -93,6 +101,10 @@
         Net.send("leave_game");
         Wordle.reset();
         show("lobby");
+      } else if (e.target.closest('[data-nav="delete"]')) {
+        if (confirm("Delete this game for everyone?")) {
+          Net.send("delete_game", { gameId: Wordle.currentGame() });
+        }
       }
     });
   }
@@ -104,7 +116,10 @@
       if (el) el.textContent = s === "connected" ? "" : s;
     });
 
-    Net.on("welcome", (m) => Lobby.setMyId(m.id));
+    Net.on("welcome", (m) => {
+      Lobby.setMyId(m.id);
+      Wordle.setMyId(m.id);
+    });
 
     Net.on("lobby", (m) => {
       Lobby.renderPlayers(m.players);
@@ -124,6 +139,11 @@
     Net.on("feed", (m) => Wordle.onFeed(m.event));
     Net.on("rejected", () => Wordle.onRejected());
     Net.on("left", () => {
+      Wordle.reset();
+      show("lobby");
+    });
+    // The owner deleted a game we were in — bounce back to the lobby.
+    Net.on("game_closed", () => {
       Wordle.reset();
       show("lobby");
     });

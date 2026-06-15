@@ -3,11 +3,13 @@
 const Lobby = (() => {
   let els = {};
   let onOpen = () => {};
+  let onDelete = () => {};
   let myId = null;
 
   function init(refs, handlers) {
     els = refs;
     onOpen = handlers.onOpen;
+    onDelete = handlers.onDelete || (() => {});
   }
 
   function setMyId(id) {
@@ -49,11 +51,21 @@ const Lobby = (() => {
         `<span><b>${label}</b> <span class="meta">— ${escapeHtml(
           who,
         )}</span></span>` + `<span class="row-right">${statusBadge}</span>`;
+      const right = li.querySelector(".row-right");
       const btn = document.createElement("button");
       btn.className = "btn btn-small";
       btn.textContent = "OPEN";
       btn.addEventListener("click", () => onOpen(g.id));
-      li.querySelector(".row-right").appendChild(btn);
+      right.appendChild(btn);
+      // Only the game's owner sees a delete control.
+      if (g.owner && g.owner === myId) {
+        const del = document.createElement("button");
+        del.className = "btn btn-small btn-danger btn-icon";
+        del.title = "delete game";
+        del.textContent = "✕";
+        del.addEventListener("click", () => onDelete(g.id));
+        right.appendChild(del);
+      }
       els.games.appendChild(li);
     }
   }

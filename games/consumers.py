@@ -7,9 +7,9 @@ the live feed, and other players' typing.
 Message protocol (JSON, ``{"type": ...}``):
 
   client -> server: hello{name}, set_name{name}, ping, create_game{gameType}, open_game{gameId},
-                    leave_game, game_action{gameId, action, data}
+                    leave_game, delete_game{gameId} (owner only), game_action{gameId, action, data}
   server -> client: welcome{id,name}, lobby{players,games}, game{snapshot}, feed{event},
-                    rejected{reason}, left
+                    rejected{reason}, left, game_closed{gameId}
 
 Broadcasts use the two-tier pattern: mutate Redis, then send a lightweight signal to the group;
 each socket's handler rebuilds and sends its own snapshot. Live typing is the one exception — it is
@@ -81,6 +81,7 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
             "create_game": self._create_game,
             "open_game": self._open_game,
             "leave_game": self._leave_game,
+            "delete_game": self._delete_game,
             "game_action": self._game_action,
         }.get(content.get("type"))
         if handler:
@@ -140,6 +141,16 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         self.current_game = None
         await self._broadcast_game(gid)
 
+    async def _delete_game(self, content):
+        gid = str(content.get("gameId", ""))
+        if await S.delete_game(self.pid, gid):
+            # Tell everyone in the game it's gone (they get bounced to the lobby), then refresh
+            # the lobby list for everyone.
+            await self.channel_layer.group_send(
+                game_group(gid), {"type": "game.closed", "gid": gid}
+            )
+            await self._broadcast_lobby()
+
     async def _game_action(self, content):
         gid = str(content.get("gameId", ""))
         if gid != self.current_game:
@@ -195,3 +206,10 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         if ev.get("pid") == self.pid:  # don't echo a player's own typing back to them
             return
         await self.send_json({"type": "feed", "event": ev})
+
+    async def game_closed(self, event):
+        gid = event["gid"]
+        if self.current_game == gid:
+            await self.channel_layer.group_discard(game_group(gid), self.channel_name)
+            self.current_game = None
+            await self.send_json({"type": "game_closed", "gameId": gid})

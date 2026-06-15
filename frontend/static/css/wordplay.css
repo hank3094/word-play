@@ -30,6 +30,7 @@
   --hit: #79b389;
   --present: #d9b755;
   --miss: #b7b2a7;
+  --danger: #cf8a8a;
   --font: "OpenDyslexic", "Comic Sans MS", "Segoe UI", sans-serif;
 }
 /* The accent follows a chosen theme, in calm pastel shades. */
@@ -145,6 +146,19 @@ body {
 .btn-back {
   border-color: var(--line);
   color: var(--fg-dim);
+}
+.btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.btn-danger:hover,
+.btn-danger:focus-visible {
+  background: var(--danger);
+  color: #fff;
+}
+.btn-icon {
+  padding: 6px 10px;
+  margin-left: 6px;
 }
 .linkish {
   border: none;
