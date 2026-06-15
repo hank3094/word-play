@@ -8,6 +8,7 @@ const Wordle = (() => {
   let gid = null;
   let snap = null;
   let buffer = "";
+  let pending = null; // a guess that's been submitted and is awaiting the server's response
   let prevRows = 0;
   let typingPeer = null; // {name, text} from another player, shown when my buffer is empty
   let lastTypingSent = 0;
@@ -24,6 +25,7 @@ const Wordle = (() => {
   function open(gameId) {
     gid = gameId;
     buffer = "";
+    pending = null;
     prevRows = 0;
     typingPeer = null;
   }
@@ -32,6 +34,7 @@ const Wordle = (() => {
     gid = null;
     snap = null;
     buffer = "";
+    pending = null;
     prevRows = 0;
     typingPeer = null;
   }
@@ -49,6 +52,7 @@ const Wordle = (() => {
     if (s.board.rows.length !== prevRows) {
       // a guess landed (mine or someone else's) — the active row advanced
       buffer = "";
+      pending = null;
       typingPeer = null;
       prevRows = s.board.rows.length;
     }
@@ -73,11 +77,17 @@ const Wordle = (() => {
           action: "guess",
           data: { word: buffer },
         });
+        // Clear the buffer immediately so the next word's letters aren't dropped (and a rejected
+        // word can't get stuck). Keep it visible as `pending` until the server replies.
+        pending = buffer;
+        buffer = "";
+        renderBoard();
       } else {
         Board.flashInvalid();
       }
       return;
     }
+    pending = null; // composing a fresh guess
     if (key === "back") {
       buffer = buffer.slice(0, -1);
     } else if (/^[a-z]$/.test(key) && buffer.length < len) {
@@ -90,7 +100,13 @@ const Wordle = (() => {
   }
 
   function onRejected() {
+    // The submitted word wasn't accepted (e.g. not a known word): flash it, then drop it so the
+    // user can type a fresh guess.
     Board.flashInvalid();
+    setTimeout(() => {
+      pending = null;
+      renderBoard();
+    }, 360);
   }
 
   function sendTyping() {
@@ -109,7 +125,13 @@ const Wordle = (() => {
   function renderBoard() {
     const b = board();
     if (!b) return;
-    const current = buffer.length ? buffer : typingPeer ? typingPeer.text : "";
+    const current = buffer.length
+      ? buffer
+      : pending
+        ? pending
+        : typingPeer
+          ? typingPeer.text
+          : "";
     Board.render({
       rows: b.rows,
       current,
