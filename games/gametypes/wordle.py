@@ -1,0 +1,142 @@
+"""Cooperative Wordle: pure game rules (no Redis, no I/O beyond the word lists).
+
+A game is a single shared 6x5 board. Any player may submit a guess; the board and its colour
+feedback are shared by everyone in the game. State shape::
+
+    {"answer": "crane",
+     "rows": [{"by": "ANA", "word": "slate", "marks": ["miss", ...]}],
+     "status": "playing"}
+
+``status`` is one of ``playing`` | ``won`` | ``lost``. The answer is never exposed in a snapshot
+until the game is finished.
+"""
+
+from __future__ import annotations
+
+import random
+from collections import Counter
+
+from .. import wordlists
+
+KEY = "wordle"
+LABEL = "Wordle"
+WORD_LENGTH = 5
+MAX_GUESSES = 6
+
+PLAYING, WON, LOST = "playing", "won", "lost"
+HIT, PRESENT, MISS = "hit", "present", "miss"
+
+# Keyboard-hint precedence: a letter shows its best-known state across all guesses.
+_RANK = {MISS: 0, PRESENT: 1, HIT: 2}
+
+
+def pick_word() -> str:
+    return random.choice(wordlists.answers())
+
+
+def is_allowed(word: str) -> bool:
+    return word.lower() in wordlists.allowed()
+
+
+def score_guess(guess: str, answer: str) -> list[str]:
+    """Per-letter marks with correct duplicate handling: greens first, then yellows.
+
+    >>> score_guess("crane", "crane")
+    ['hit', 'hit', 'hit', 'hit', 'hit']
+    >>> score_guess("pppap", "apple")  # only as many yellows/greens as the answer has
+    ['miss', 'present', 'present', 'present', 'miss']
+    """
+    guess = guess.lower()
+    answer = answer.lower()
+    marks = [MISS] * len(guess)
+    remaining = Counter(answer)
+    for i, ch in enumerate(guess):  # exact-position hits first
+        if i < len(answer) and ch == answer[i]:
+            marks[i] = HIT
+            remaining[ch] -= 1
+    for i, ch in enumerate(guess):  # then present-elsewhere from what's left
+        if marks[i] == HIT:
+            continue
+        if remaining.get(ch, 0) > 0:
+            marks[i] = PRESENT
+            remaining[ch] -= 1
+    return marks
+
+
+def create_state() -> dict:
+    return {"answer": pick_word(), "rows": [], "status": PLAYING}
+
+
+def is_finished(state: dict) -> bool:
+    return state.get("status") in (WON, LOST)
+
+
+def handle_action(state: dict, pid: str, name: str, action: str, data: dict):
+    """Apply a player's action. Returns ``(new_state, events)``.
+
+    ``events`` is a list of dicts. ``{"kind": "invalid", ...}`` means the action was rejected and
+    the state is unchanged (only the acting player should be notified). ``{"kind": "typing", ...}``
+    is a transient liveness event (no board change). A ``guess`` yields a ``guess`` event plus a
+    ``win``/``lose`` event when the game ends.
+    """
+    if is_finished(state):
+        return state, [{"kind": "invalid", "reason": "finished"}]
+
+    if action == "typing":
+        text = str(data.get("text", ""))[:WORD_LENGTH].lower()
+        return state, [{"kind": "typing", "pid": pid, "name": name, "text": text}]
+
+    if action == "guess":
+        word = str(data.get("word", "")).lower().strip()
+        if len(word) != WORD_LENGTH or not word.isalpha():
+            return state, [{"kind": "invalid", "reason": "length"}]
+        if not is_allowed(word):
+            return state, [{"kind": "invalid", "reason": "unknown", "word": word}]
+        marks = score_guess(word, state["answer"])
+        rows = [*state["rows"], {"by": name, "word": word, "marks": marks}]
+        if all(m == HIT for m in marks):
+            status = WON
+        elif len(rows) >= MAX_GUESSES:
+            status = LOST
+        else:
+            status = PLAYING
+        new_state = {**state, "rows": rows, "status": status}
+        events = [{"kind": "guess", "name": name, "word": word, "marks": marks}]
+        if status == WON:
+            events.append({"kind": "win", "name": name, "word": word})
+        elif status == LOST:
+            events.append({"kind": "lose", "answer": state["answer"]})
+        return new_state, events
+
+    return state, [{"kind": "invalid", "reason": "unknown_action"}]
+
+
+def keyboard_hints(state: dict) -> dict:
+    hints: dict[str, str] = {}
+    for row in state["rows"]:
+        for ch, mark in zip(row["word"], row["marks"], strict=False):
+            if ch not in hints or _RANK[mark] > _RANK[hints[ch]]:
+                hints[ch] = mark
+    return hints
+
+
+def snapshot(state: dict) -> dict:
+    finished = is_finished(state)
+    return {
+        "rows": state["rows"],
+        "status": state["status"],
+        "guessesUsed": len(state["rows"]),
+        "maxGuesses": MAX_GUESSES,
+        "wordLength": WORD_LENGTH,
+        "keyboard": keyboard_hints(state),
+        # Revealed only once the game is over (so a snapshot can't leak the answer mid-game).
+        "answer": state["answer"] if finished else None,
+    }
+
+
+def result(state: dict) -> dict:
+    return {
+        "won": state["status"] == WON,
+        "answer": state["answer"],
+        "guesses_used": len(state["rows"]),
+    }

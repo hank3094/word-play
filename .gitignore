@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Django
+*.sqlite3
+*.sqlite3-journal
+/staticfiles/
+
+# uv
+# (uv.lock IS committed)
+
+# Playwright / node
+node_modules/
+/test-results/
+/playwright-report/
+/tests_e2e/.cache/
+
+# Env / editors
+.env
+.DS_Store
+.idea/
+.vscode/

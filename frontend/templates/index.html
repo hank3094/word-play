@@ -1,0 +1,98 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- maximum-scale to stop double-tap zoom on the on-screen keyboard / board taps. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <title>WORD PLAY</title>
+    <link rel="stylesheet" href="{% static 'css/wordplay.css' %}" />
+  </head>
+  <body data-theme="green">
+    <div class="frame">
+      <main id="screen" class="screen">
+        <!-- ===== NAME ENTRY ===== -->
+        <section id="name-entry" class="view is-active">
+          <h1 class="title-plain">WORD PLAY</h1>
+          <p class="tagline">cooperative word games</p>
+          <form id="name-form" class="name-form">
+            <label class="name-label" for="name-input">What shall we call you?</label>
+            <input
+              id="name-input"
+              class="text-input"
+              type="text"
+              maxlength="16"
+              autocomplete="off"
+              autocapitalize="characters"
+              placeholder="YOUR NAME"
+            />
+            <button type="submit" class="btn btn-primary">JOIN</button>
+          </form>
+        </section>
+
+        <!-- ===== LOBBY ===== -->
+        <section id="lobby" class="view">
+          <header class="lobby-head">
+            <h1 class="title-plain sm">WORD PLAY</h1>
+            <div class="you">
+              you are
+              <button id="edit-name" class="linkish" title="change name">
+                <b id="you-name">PLAYER</b> ✎
+              </button>
+            </div>
+          </header>
+
+          <div class="lobby-cols">
+            <section class="panel">
+              <h2 class="panel-h">PLAYERS HERE</h2>
+              <ul id="players-list" class="list players"></ul>
+            </section>
+
+            <section class="panel">
+              <div class="panel-h-row">
+                <h2 class="panel-h">GAMES</h2>
+                <button id="new-game" class="btn btn-small">+ NEW WORDLE</button>
+              </div>
+              <ul id="games-list" class="list games"></ul>
+            </section>
+          </div>
+
+          <section class="panel history">
+            <h2 class="panel-h">RECENT</h2>
+            <ul id="history-list" class="list history-items"></ul>
+          </section>
+
+          <p id="lobby-status" class="status-line"></p>
+        </section>
+
+        <!-- ===== WORDLE GAME ===== -->
+        <section id="wordle-game" class="view">
+          <header class="game-head">
+            <button class="btn btn-back" data-nav="leave">← LOBBY</button>
+            <span id="wordle-players" class="game-players"></span>
+            <span id="wordle-status" class="game-status"></span>
+          </header>
+
+          <div class="board-wrap">
+            <div id="board" class="board"></div>
+          </div>
+
+          <div id="wordle-feed" class="feed"></div>
+
+          <div id="keyboard" class="keyboard"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="{% static 'js/api.js' %}"></script>
+    <script src="{% static 'js/net.js' %}"></script>
+    <script src="{% static 'js/keyboard.js' %}"></script>
+    <script src="{% static 'js/board.js' %}"></script>
+    <script src="{% static 'js/wordle.js' %}"></script>
+    <script src="{% static 'js/lobby.js' %}"></script>
+    <script src="{% static 'js/app.js' %}"></script>
+  </body>
+</html>

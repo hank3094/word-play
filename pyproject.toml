@@ -1,0 +1,42 @@
+[project]
+name = "word-play"
+version = "0.1.0"
+description = "Cooperative multiplayer word games (Wordle first) over WebSockets, with a calm, mobile-friendly UI."
+requires-python = ">=3.12"
+dependencies = [
+    "django>=5.0",
+    "channels>=4.1",
+    "daphne>=4.1",
+    "channels-redis>=4.2",
+    "redis>=5.0",
+    "whitenoise>=6.6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-django>=4.8",
+    "pytest-asyncio>=0.23",
+    "fakeredis>=2.21",
+    "playwright>=1.44",
+    "pytest-playwright>=0.5",
+    "ruff>=0.5",
+    "pre-commit>=3.7",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "DJ"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "wordplay.settings_test"
+python_files = ["test_*.py", "tests.py"]
+testpaths = ["games/tests"]
+asyncio_mode = "auto"
+
+[tool.uv]
+package = false

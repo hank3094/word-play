@@ -1,0 +1,87 @@
+// Renders the lobby: who's online, which games are active (with an OPEN button), and a recent
+// history strip. Emits intent through callbacks wired in app.js (create / open a game).
+const Lobby = (() => {
+  let els = {};
+  let onOpen = () => {};
+  let myId = null;
+
+  function init(refs, handlers) {
+    els = refs;
+    onOpen = handlers.onOpen;
+  }
+
+  function setMyId(id) {
+    myId = id;
+  }
+
+  function renderPlayers(players) {
+    els.players.innerHTML = "";
+    if (!players.length) {
+      els.players.innerHTML = '<li class="empty">nobody here yet</li>';
+      return;
+    }
+    for (const p of players) {
+      const li = document.createElement("li");
+      const you = p.id === myId ? " (you)" : "";
+      li.innerHTML = `<span><span class="dot">●</span>${escapeHtml(
+        p.name,
+      )}${you}</span>`;
+      els.players.appendChild(li);
+    }
+  }
+
+  function renderGames(games) {
+    els.games.innerHTML = "";
+    if (!games.length) {
+      els.games.innerHTML = '<li class="empty">no games yet — start one!</li>';
+      return;
+    }
+    for (const g of games) {
+      const li = document.createElement("li");
+      li.className = "game-row";
+      const label = g.gameType.toUpperCase();
+      const who = g.players.length ? g.players.join(", ") : "empty";
+      const statusBadge =
+        g.status === "playing"
+          ? `<span class="meta">${g.count} playing</span>`
+          : `<span class="badge ${g.status}">${g.status}</span>`;
+      li.innerHTML =
+        `<span><b>${label}</b> <span class="meta">— ${escapeHtml(
+          who,
+        )}</span></span>` + `<span class="row-right">${statusBadge}</span>`;
+      const btn = document.createElement("button");
+      btn.className = "btn btn-small";
+      btn.textContent = "OPEN";
+      btn.addEventListener("click", () => onOpen(g.id));
+      li.querySelector(".row-right").appendChild(btn);
+      els.games.appendChild(li);
+    }
+  }
+
+  function renderHistory(history) {
+    els.history.innerHTML = "";
+    if (!history || !history.length) {
+      els.history.innerHTML = '<li class="empty">no finished games yet</li>';
+      return;
+    }
+    for (const h of history.slice(0, 8)) {
+      const li = document.createElement("li");
+      const outcome = h.won ? "won" : "lost";
+      li.innerHTML =
+        `<span><b>${escapeHtml(h.answer.toUpperCase())}</b> ` +
+        `<span class="meta">${escapeHtml(
+          (h.players || []).join(", "),
+        )}</span></span>` +
+        `<span class="badge ${outcome}">${outcome} ${h.guessesUsed}/6</span>`;
+      els.history.appendChild(li);
+    }
+  }
+
+  function escapeHtml(str) {
+    const d = document.createElement("div");
+    d.textContent = str == null ? "" : str;
+    return d.innerHTML;
+  }
+
+  return { init, setMyId, renderPlayers, renderGames, renderHistory };
+})();

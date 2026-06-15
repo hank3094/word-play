@@ -1,0 +1,16 @@
+.git
+.venv
+**/__pycache__
+*.pyc
+*.sqlite3
+*.sqlite3-journal
+staticfiles/
+node_modules/
+test-results/
+playwright-report/
+tests_e2e/
+.pytest_cache/
+.ruff_cache/
+.idea/
+.vscode/
+.DS_Store
