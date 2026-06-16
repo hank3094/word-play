@@ -345,7 +345,6 @@
         filter: document.getElementById("show-rejected"),
         gameFilter: document.getElementById("this-game-only"),
         gameFilterRow: document.getElementById("game-filter-row"),
-        toggle: document.getElementById("activity-toggle"),
         close: document.getElementById("activity-close"),
         resizer: document.getElementById("panel-resizer"),
       },

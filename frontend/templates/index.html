@@ -52,6 +52,7 @@
                 <b id="you-name">PLAYER</b> ✎
               </button>
             </div>
+            <button class="btn btn-small activity-toggle-btn" aria-label="activity log">LOG</button>
           </header>
 
           <div class="lobby-cols">
@@ -91,6 +92,7 @@
             >
               ✕ DELETE
             </button>
+            <button class="btn btn-small activity-toggle-btn" aria-label="activity log">LOG</button>
           </header>
 
           <div class="game-controls">
@@ -209,7 +211,7 @@
       </main>
 
       <!-- ===== ACTIVITY LOG ===== -->
-      <!-- Sidebar on wide screens; full-screen overlay on narrow (toggled by #activity-toggle). -->
+      <!-- Sidebar on wide screens; full-screen overlay on narrow (toggled by .activity-toggle-btn in each view header). -->
       <aside id="activity-panel" class="activity-panel">
         <div id="panel-resizer" class="panel-resizer" aria-hidden="true"></div>
         <div class="activity-head">
@@ -237,8 +239,6 @@
         </div>
       </aside>
 
-      <!-- Floating toggle button — visible on narrow screens only. -->
-      <button id="activity-toggle" class="btn btn-small activity-toggle-btn">LOG</button>
     </div>
 
     <!-- Shown only while an action fired during a disconnect waits to execute. -->

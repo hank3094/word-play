@@ -532,19 +532,19 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 0;
-  padding: 10px 0;
+  padding: 6px 0;
+  container-type: size;
 }
 .board {
   display: grid;
   grid-auto-rows: 1fr;
   gap: 6px;
-  /* Width scales with column count; third term converts the height budget to an equivalent width. */
-  width: min(
-    calc(var(--cols, 5) * 62px),
-    92vw,
-    calc(var(--cols, 5) / var(--rows, 6) * 80vh)
-  );
+  /* Height-driven: fills available space in the flex cell; width follows via aspect-ratio.
+     max-width prevents tiles from becoming too wide on wide-but-short viewports. */
+  height: min(calc(var(--rows, 6) * 62px), 94cqh);
+  max-width: min(calc(var(--cols, 5) * 62px), 96cqw);
   aspect-ratio: var(--cols, 5) / var(--rows, 6);
+  width: auto;
 }
 .board-row {
   display: grid;
@@ -743,12 +743,12 @@ body {
     overflow: hidden;
     border-left: none;
   }
-  /* Show LOG toggle when the sidebar is collapsed on wide screens. */
-  .activity-panel.is-collapsed ~ .activity-toggle-btn {
-    display: block;
-  }
+  /* Hide LOG toggles when sidebar is visible; show them when panel is collapsed. */
   .activity-toggle-btn {
     display: none;
+  }
+  body.panel-collapsed .activity-toggle-btn {
+    display: inline-flex;
   }
   /* Close button doubles as collapse button on wide screens. */
   .activity-close {
@@ -767,6 +767,12 @@ body {
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
   flex-wrap: wrap;
+}
+.activity-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
 }
 .activity-head .panel-h {
   margin: 0;
@@ -846,14 +852,7 @@ body {
   opacity: 1;
 }
 
-/* Floating toggle button (narrow screens only). */
-.activity-toggle-btn {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  z-index: 40;
-  opacity: 0.85;
-}
+/* LOG toggle lives inside view headers — visible on narrow screens always, wide only when sidebar is collapsed (see @media above). */
 
 /* ===== reconnect overlay ===== */
 /* A small floating pill shown only while an action waits for the socket to reconnect. */

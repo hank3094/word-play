@@ -34,11 +34,13 @@ const Activity = (() => {
     _applyWidth(0);
     els.panel.classList.add("is-collapsed");
     localStorage.setItem(PH_KEY, "1");
+    document.body.classList.add("panel-collapsed");
   }
   function _expand() {
     _applyWidth(panelW);
     els.panel.classList.remove("is-collapsed");
     localStorage.removeItem(PH_KEY);
+    document.body.classList.remove("panel-collapsed");
   }
   function _restoreState() {
     const saved = parseInt(localStorage.getItem(PW_KEY) || "", 10);
@@ -47,6 +49,7 @@ const Activity = (() => {
       _collapse();
     } else {
       _applyWidth(panelW);
+      document.body.classList.remove("panel-collapsed");
     }
   }
 
@@ -68,12 +71,14 @@ const Activity = (() => {
       render();
     });
 
-    els.toggle.addEventListener("click", () => {
-      if (window.innerWidth >= WIDE) {
-        _expand();
-      } else {
-        els.panel.classList.add("is-open");
-      }
+    document.querySelectorAll(".activity-toggle-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (window.innerWidth >= WIDE) {
+          _expand();
+        } else {
+          els.panel.classList.add("is-open");
+        }
+      });
     });
     els.close.addEventListener("click", () => {
       if (window.innerWidth >= WIDE) {
