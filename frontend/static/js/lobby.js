@@ -6,10 +6,13 @@ const Lobby = (() => {
   let onDelete = () => {};
   let myId = null;
 
+  let onOpenHistory = () => {};
+
   function init(refs, handlers) {
     els = refs;
     onOpen = handlers.onOpen;
     onDelete = handlers.onDelete || (() => {});
+    onOpenHistory = handlers.onOpenHistory || (() => {});
   }
 
   function setMyId(id) {
@@ -80,14 +83,29 @@ const Lobby = (() => {
     for (const h of history.slice(0, 8)) {
       const li = document.createElement("li");
       const outcome = h.won ? "won" : "lost";
+      const viewBtn =
+        h.hasSnapshot && h.gameId
+          ? `<button class="btn btn-small history-view" data-gid="${escapeHtml(
+              h.gameId,
+            )}">VIEW</button>`
+          : "";
       li.innerHTML =
         `<span><b>${escapeHtml(h.answer.toUpperCase())}</b> ` +
         `<span class="meta">${escapeHtml(
           (h.players || []).join(", "),
         )}</span></span>` +
-        `<span class="badge ${outcome}">${outcome} ${h.guessesUsed}/6</span>`;
+        `<span class="badge ${outcome}">${outcome} ${h.guessesUsed}/6</span>` +
+        viewBtn;
       els.history.appendChild(li);
     }
+    els.history.addEventListener(
+      "click",
+      (e) => {
+        const btn = e.target.closest(".history-view");
+        if (btn) onOpenHistory(btn.dataset.gid);
+      },
+      { once: true },
+    );
   }
 
   function escapeHtml(str) {

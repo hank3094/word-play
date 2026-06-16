@@ -113,6 +113,7 @@
             Net.send("delete_game", { gameId: id });
           }
         },
+        onOpenHistory: (id) => Net.send("open_game", { gameId: id }),
       },
     );
 

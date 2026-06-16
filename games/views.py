@@ -29,12 +29,14 @@ def history(request):
         {
             "history": [
                 {
+                    "gameId": r.game_id,
                     "gameType": r.game_type,
                     "answer": r.answer,
                     "won": r.won,
                     "guessesUsed": r.guesses_used,
                     "players": r.player_names.split(",") if r.player_names else [],
                     "at": r.created_at.isoformat(),
+                    "hasSnapshot": r.snapshot is not None,
                 }
                 for r in rows
             ]
