@@ -149,11 +149,6 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         if snap:
             # Only log a join event if the player wasn't already a member (avoids noise on
             # reconnect, where open_game is re-sent to rejoin the server-side group).
-            was_member = self.current_game == gid
-            if not was_member:
-                await self._broadcast_activity(
-                    {"kind": "player_joined", "gameId": gid, "name": self.name, "color": self.color}
-                )
             await self._enter_game(gid)
 
     async def _enter_game(self, gid):

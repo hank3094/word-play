@@ -89,9 +89,6 @@ const Activity = (() => {
       case "game_created":
         body = `${dot}<b>${n}</b> started a Wordle`;
         break;
-      case "player_joined":
-        body = `${dot}<b>${n}</b> joined`;
-        break;
       case "guess":
         body = `${dot}<b>${n}</b>: ${w} ${marks(ev.marks)}`;
         break;
