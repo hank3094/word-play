@@ -139,17 +139,19 @@ const Activity = (() => {
   function load(evts, offset, more) {
     fetching = false;
     hasMore = !!more;
-    const incoming = (evts || []).filter((e) => !seenIds.has(e.id));
-    incoming.forEach((e) => e.id && seenIds.add(e.id));
 
     if (offset === 0) {
-      events = incoming;
-      serverOffset = incoming.length;
+      // Full replacement: rebuild seenIds from scratch so future live pushes still dedup correctly.
+      events = evts || [];
+      seenIds = new Set(events.map((e) => e.id).filter(Boolean));
+      serverOffset = events.length;
       prependNext = false;
     } else {
-      events = incoming.concat(events); // older events go before current ones
+      // Prepending older page: only skip ids we already have.
+      const incoming = (evts || []).filter((e) => !seenIds.has(e.id));
+      incoming.forEach((e) => e.id && seenIds.add(e.id));
+      events = incoming.concat(events);
       serverOffset = offset + incoming.length;
-      // prependNext already set to true when we requested this batch
     }
     render();
   }
