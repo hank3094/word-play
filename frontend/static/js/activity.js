@@ -2,65 +2,141 @@
 // panel. On wide screens (≥960 px) the panel is a permanent sidebar; on narrow screens it is a
 // full-screen overlay opened with the floating LOG button.
 const Activity = (() => {
+  const WIDE = 960; // px, matches CSS breakpoint
+  const PW_KEY = "wp-panel-w"; // localStorage: saved panel width
+  const PH_KEY = "wp-panel-hidden"; // localStorage: collapsed state
+  const MIN_W = 160;
+  const MAX_W = 520;
+  const DEFAULT_W = 270;
+
   let events = [];
-  let showRejected = false; // "show unsuccessful" checkbox
-  let filterToGame = false; // "this game only" checkbox
-  let currentGame = null; // set to a gameId while the player is inside a game
+  let showRejected = false;
+  let filterToGame = false;
+  let currentGame = null;
   let onOpenGame = () => {};
   let els = {};
+  let panelW = DEFAULT_W; // current width (wide sidebar only)
+
+  // --- panel width / collapse helpers -------------------------------------
+
+  function _applyWidth(w) {
+    document.documentElement.style.setProperty("--activity-w", w + "px");
+  }
+
+  function _collapse() {
+    _applyWidth(0);
+    els.panel.classList.add("is-collapsed");
+    localStorage.setItem(PH_KEY, "1");
+  }
+
+  function _expand() {
+    _applyWidth(panelW);
+    els.panel.classList.remove("is-collapsed");
+    localStorage.removeItem(PH_KEY);
+  }
+
+  function _restoreState() {
+    const saved = parseInt(localStorage.getItem(PW_KEY) || "", 10);
+    panelW = saved >= MIN_W && saved <= MAX_W ? saved : DEFAULT_W;
+    if (localStorage.getItem(PH_KEY)) {
+      _collapse();
+    } else {
+      _applyWidth(panelW);
+    }
+  }
+
+  // --- init ---------------------------------------------------------------
 
   function init(refs, handlers) {
     els = refs;
     onOpenGame = (handlers && handlers.onOpenGame) || (() => {});
 
+    _restoreState();
+
+    // Filters
     els.filter.addEventListener("change", () => {
       showRejected = els.filter.checked;
       render();
     });
-
     els.gameFilter.addEventListener("change", () => {
       filterToGame = els.gameFilter.checked;
       render();
     });
 
-    // Narrow-screen open/close.
-    els.toggle.addEventListener("click", () =>
-      els.panel.classList.add("is-open"),
-    );
-    els.close.addEventListener("click", () =>
-      els.panel.classList.remove("is-open"),
-    );
+    // Toggle (LOG button): open overlay on narrow; expand sidebar on wide.
+    els.toggle.addEventListener("click", () => {
+      if (window.innerWidth >= WIDE) {
+        _expand();
+      } else {
+        els.panel.classList.add("is-open");
+      }
+    });
 
-    // Jump-to-game buttons (event delegation so they work on dynamically-rendered rows).
+    // Close button: collapse sidebar on wide; close overlay on narrow.
+    els.close.addEventListener("click", () => {
+      if (window.innerWidth >= WIDE) {
+        _collapse();
+      } else {
+        els.panel.classList.remove("is-open");
+      }
+    });
+
+    // Jump-to-game buttons (event delegation).
     els.list.addEventListener("click", (e) => {
       const btn = e.target.closest(".aev-jump");
       if (btn) {
         onOpenGame(btn.dataset.gid);
-        els.panel.classList.remove("is-open"); // close mobile overlay after jumping
+        els.panel.classList.remove("is-open");
       }
     });
+
+    // Resize drag handle (wide screens only).
+    if (els.resizer) {
+      els.resizer.addEventListener("mousedown", (e) => {
+        if (window.innerWidth < WIDE) return;
+        e.preventDefault();
+        els.resizer.classList.add("dragging");
+        const onMove = (ev) => {
+          const w = Math.max(
+            MIN_W,
+            Math.min(MAX_W, window.innerWidth - ev.clientX),
+          );
+          panelW = w;
+          _applyWidth(w);
+        };
+        const onUp = () => {
+          els.resizer.classList.remove("dragging");
+          localStorage.setItem(PW_KEY, String(panelW));
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+        };
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+      });
+    }
   }
 
-  // Called when entering / leaving a game. Sets "this game only" on by default when entering.
+  // --- public API ---------------------------------------------------------
+
   function setCurrentGame(gid) {
     currentGame = gid;
-    filterToGame = !!gid; // default: filter when entering a game
+    filterToGame = !!gid;
     els.gameFilter.checked = filterToGame;
-    els.gameFilterRow.hidden = !gid; // hide the checkbox when in the lobby
+    els.gameFilterRow.hidden = !gid;
     render();
   }
 
-  // Replace the full event list (called on welcome with the server's stored history).
   function load(evts) {
     events = evts || [];
     render();
   }
 
-  // Append a single new event (real-time broadcast).
   function push(ev) {
     events.push(ev);
     render();
   }
+
+  // --- rendering ----------------------------------------------------------
 
   function render() {
     let visible = events;
@@ -111,8 +187,6 @@ const Activity = (() => {
           ? " aev-won"
           : "";
 
-    // Show a jump button for entries that belong to a different game than the current one
-    // (or any game when the player is in the lobby). No button for the game you're already in.
     const canJump = ev.gameId && ev.gameId !== currentGame;
     const jumpBtn = canJump
       ? `<button class="btn btn-small aev-jump" data-gid="${esc(

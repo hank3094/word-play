@@ -32,6 +32,7 @@
   --miss: #b7b2a7;
   --danger: #cf8a8a;
   --font: "OpenDyslexic", "Comic Sans MS", "Segoe UI", sans-serif;
+  --activity-w: 270px;
 }
 /* The accent follows a chosen theme, in calm pastel shades. */
 body[data-theme="green"] {
@@ -70,7 +71,7 @@ body {
 /* Wide screens: reserve the right edge for the activity sidebar. */
 @media (min-width: 960px) {
   .frame {
-    padding-right: 270px;
+    padding-right: var(--activity-w);
   }
 }
 
@@ -638,6 +639,24 @@ body {
   display: flex;
 }
 
+/* Drag handle — left edge of the panel, wide screens only. */
+.panel-resizer {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  user-select: none;
+  z-index: 1;
+}
+.panel-resizer:hover,
+.panel-resizer.dragging {
+  background: var(--accent);
+  opacity: 0.35;
+}
+
 /* Wide: always-visible right-hand sidebar. */
 @media (min-width: 960px) {
   .activity-panel,
@@ -647,15 +666,28 @@ body {
     right: 0;
     bottom: 0;
     left: auto;
-    width: 270px;
+    width: var(--activity-w);
     border-left: 1px solid var(--line);
     background: var(--panel);
+  }
+  .activity-panel.is-collapsed {
+    width: 0;
+    overflow: hidden;
+    border-left: none;
+  }
+  /* Show LOG toggle when the sidebar is collapsed on wide screens. */
+  .activity-panel.is-collapsed ~ .activity-toggle-btn {
+    display: block;
   }
   .activity-toggle-btn {
     display: none;
   }
+  /* Close button doubles as collapse button on wide screens. */
   .activity-close {
-    display: none;
+    display: flex;
+  }
+  .panel-resizer {
+    display: block;
   }
 }
 

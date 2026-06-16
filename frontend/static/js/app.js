@@ -253,6 +253,7 @@
         gameFilterRow: document.getElementById("game-filter-row"),
         toggle: document.getElementById("activity-toggle"),
         close: document.getElementById("activity-close"),
+        resizer: document.getElementById("panel-resizer"),
       },
       {
         onOpenGame: (gid) => Net.send("open_game", { gameId: gid }),
