@@ -203,6 +203,12 @@
     Net.on("welcome", (m) => {
       Lobby.setMyId(m.id);
       Wordle.setMyId(m.id);
+      // If the socket dropped while we were in a game, rejoin it after reconnecting so the server
+      // re-associates us (a fresh connection starts with no current game).
+      const gid = Wordle.currentGame();
+      if (gid && views["wordle-game"].classList.contains("is-active")) {
+        Net.send("open_game", { gameId: gid });
+      }
     });
 
     Net.on("lobby", (m) => {

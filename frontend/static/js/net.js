@@ -1,11 +1,15 @@
 // Single WebSocket client: connect, typed send, and a {type -> handlers[]} dispatch registry.
-// A periodic ping keeps the server-side presence TTL fresh. There is no auto-reconnect beyond
-// re-sending hello when the lobby reopens the socket.
+// A periodic ping keeps the server-side presence TTL fresh. If the socket drops (server restart,
+// laptop sleep, network blip) it auto-reconnects with backoff and re-sends hello — otherwise every
+// action after a drop would silently no-op (send() only fires on an open socket).
 const Net = (() => {
   let ws = null;
   let name = "PLAYER";
   let cid = null;
   let pingTimer = null;
+  let reconnectTimer = null;
+  let reconnectDelay = 1000;
+  let wantConnection = false; // true once connect() is called; keeps us reconnecting
   const handlers = {};
   let statusCb = null;
 
@@ -29,12 +33,20 @@ const Net = (() => {
   function connect(playerName) {
     name = playerName;
     cid = clientId();
+    wantConnection = true;
     if (ws && ws.readyState <= WebSocket.OPEN) {
       send("set_name", { name });
       return;
     }
+    openSocket();
+  }
+
+  function openSocket() {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
     ws = new WebSocket(API.wsUrl());
     ws.onopen = () => {
+      reconnectDelay = 1000; // reset backoff on a good connection
       send("hello", { name, cid });
       setStatus("connected");
       startPing();
@@ -44,10 +56,25 @@ const Net = (() => {
       (handlers[msg.type] || []).forEach((h) => h(msg));
     };
     ws.onclose = () => {
-      setStatus("disconnected");
       stopPing();
+      if (!wantConnection) {
+        setStatus("disconnected");
+        return;
+      }
+      setStatus("reconnecting…");
+      scheduleReconnect();
     };
-    ws.onerror = () => setStatus("connection error");
+    // onerror is always followed by onclose, which handles the reconnect.
+    ws.onerror = () => {};
+  }
+
+  function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      openSocket();
+    }, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 2, 10000); // 1s,2s,4s,8s,10s…
   }
 
   function send(type, payload = {}) {
