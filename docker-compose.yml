@@ -3,6 +3,8 @@
 # Live game/presence state is shared via Redis, but game rooms are not sharded across workers, so
 # run a single `app` replica for now. channels_redis is what makes scaling out possible later
 # (it would also need room affinity / sharding).
+#
+# Copy .env.example to .env and edit before running `docker compose up`.
 services:
   redis:
     image: redis:7-alpine
@@ -20,18 +22,18 @@ services:
   app:
     build: .
     ports:
-      - "8000:8000"
+      - "${PORT:-8000}:8000"
     depends_on:
       redis:
         condition: service_healthy
     environment:
       WORD_PLAY_DEBUG: "0"
       WORD_PLAY_ALLOWED_HOSTS: "*"
-      WORD_PLAY_SECRET_KEY: "change-me-for-real-deployments"
+      WORD_PLAY_SECRET_KEY: "${SECRET_KEY:-change-me-for-real-deployments}"
       WORD_PLAY_DB_PATH: "/app/data/db.sqlite3"
       WORD_PLAY_REDIS_URL: "redis://redis:6379/0"
     volumes:
-      - dbdata:/app/data
+      - "${DB_DIR:-./data}:/app/data"
     healthcheck:
       test:
         - CMD
@@ -45,5 +47,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  dbdata:
   redisdata:
