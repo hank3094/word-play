@@ -148,7 +148,7 @@ body {
 .btn-small {
   font-size: 15px;
   padding: 6px 12px;
-  min-height: 18px;
+  min-height: 36px;
 }
 .btn-back {
   border-color: var(--line);
@@ -473,45 +473,6 @@ body {
   font-weight: bold;
 }
 
-/* sharing controls + indicators */
-.game-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 14px;
-  padding: 8px 0 0;
-}
-.share-toggle {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
-  color: var(--fg-dim);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.share-toggle input {
-  cursor: pointer;
-  accent-color: var(--accent);
-}
-.share-toggle input:disabled {
-  cursor: default;
-}
-.share-toggle:has(input:disabled) {
-  opacity: 0.5;
-}
-.share-badge {
-  font-size: 12px;
-}
-.share-stop {
-  border: none;
-  background: none;
-  cursor: pointer;
-  font-size: 12px;
-  padding: 0 2px;
-  color: var(--danger);
-}
-
 .board-wrap {
   flex: 1;
   display: flex;
@@ -534,7 +495,6 @@ body {
   gap: 6px;
 }
 .tile {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -545,16 +505,6 @@ body {
   text-transform: uppercase;
   background: var(--bg);
   user-select: none;
-}
-/* Another sharer's letter, overlaid beneath your own at low opacity in their colour. */
-.tile-ghost {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.3;
-  pointer-events: none;
 }
 .tile.filled {
   border-color: var(--fg-dim);
@@ -782,14 +732,6 @@ body {
   padding: 16px;
   margin: 0;
 }
-.aev-load-more {
-  color: var(--fg-dim);
-  font-size: 0.75em;
-  text-align: center;
-  padding: 6px;
-  margin: 0;
-  border-bottom: 1px solid var(--line);
-}
 .aev {
   display: flex;
   align-items: baseline;
@@ -819,9 +761,9 @@ body {
 .aev-jump {
   flex-shrink: 0;
   margin-left: auto;
-  font-size: 1em;
+  font-size: 1.0em;
   padding: 0 5px;
-  line-height: 1;
+  line-height: 1.0;
   opacity: 0.6;
 }
 .aev-jump:hover {
@@ -835,40 +777,4 @@ body {
   right: 1rem;
   z-index: 40;
   opacity: 0.85;
-}
-
-/* ===== reconnect overlay ===== */
-/* A small floating pill shown only while an action waits for the socket to reconnect. */
-.reconnect-overlay {
-  position: fixed;
-  bottom: 1.25rem;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
-  color: var(--fg-dim);
-  font-size: 15px;
-  z-index: 60; /* above the activity panel (50) */
-}
-.reconnect-overlay[hidden] {
-  display: none;
-}
-.spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--line);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }

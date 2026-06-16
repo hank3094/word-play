@@ -284,6 +284,12 @@
       players: document.getElementById("wordle-players"),
       status: document.getElementById("wordle-status"),
       delete: document.getElementById("wordle-delete"),
+      shareMine: document.getElementById("share-mine"),
+      shareMineRow: document.getElementById("share-mine-row"),
+      allowShare: document.getElementById("allow-share"),
+      allowShareRow: document.getElementById("allow-share-row"),
+      simulShare: document.getElementById("simul-share"),
+      simulShareRow: document.getElementById("simul-share-row"),
     });
     Keyboard.render(document.getElementById("keyboard"), (key) =>
       Wordle.input(key),

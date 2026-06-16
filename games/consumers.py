@@ -94,6 +94,10 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
             "delete_game": self._delete_game,
             "game_action": self._game_action,
             "fetch_activity": self._fetch_activity,
+            "share_start": self._share_start,
+            "share_stop": self._share_stop,
+            "set_allow_sharing": self._set_allow_sharing,
+            "set_simultaneous": self._set_simultaneous,
         }.get(content.get("type"))
         if handler:
             await handler(content)
@@ -148,6 +152,32 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(
             {"type": "activity_log", "events": events, "offset": offset, "hasMore": has_more}
         )
+
+    # --- live-typing screen sharing (low-frequency: mutate Redis, then broadcast a snapshot) ---
+    async def _share_start(self, content):
+        gid = str(content.get("gameId", ""))
+        if gid == self.current_game and await S.share_start(self.pid, gid):
+            await self._broadcast_game(gid)
+
+    async def _share_stop(self, content):
+        gid = str(content.get("gameId", ""))
+        target = str(content.get("targetId") or "") or None
+        if gid == self.current_game and await S.share_stop(self.pid, gid, target):
+            await self._broadcast_game(gid)
+
+    async def _set_allow_sharing(self, content):
+        gid = str(content.get("gameId", ""))
+        if gid == self.current_game and await S.set_allow_sharing(
+            self.pid, gid, bool(content.get("allowed"))
+        ):
+            await self._broadcast_game(gid)
+
+    async def _set_simultaneous(self, content):
+        gid = str(content.get("gameId", ""))
+        if gid == self.current_game and await S.set_simultaneous(
+            self.pid, gid, bool(content.get("value"))
+        ):
+            await self._broadcast_game(gid)
 
     async def _create_game(self, content):
         game_type = str(content.get("gameType", "wordle"))

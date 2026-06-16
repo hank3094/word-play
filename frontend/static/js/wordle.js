@@ -11,12 +11,44 @@ const Wordle = (() => {
   let pending = null; // a guess that's been submitted and is awaiting the server's response
   let rejectMsg = null; // why the last guess was rejected, shown until the next keystroke
   let prevRows = 0;
-  let typingPeer = null; // {name, text} from another player, shown when my buffer is empty
+  let typingPeers = {}; // pid -> {name, text}: other players' live typing (only sharers send it)
   let lastTypingSent = 0;
 
   function init(refs) {
     els = refs;
     Board.mount(els.board);
+
+    // Personal share toggle: claim or release my own live typing.
+    if (els.shareMine) {
+      els.shareMine.addEventListener("change", () => {
+        Net.send(iAmSharing() ? "share_stop" : "share_start", { gameId: gid });
+      });
+    }
+    // Host-only master switches.
+    if (els.allowShare) {
+      els.allowShare.addEventListener("change", () => {
+        Net.send("set_allow_sharing", {
+          gameId: gid,
+          allowed: els.allowShare.checked,
+        });
+      });
+    }
+    if (els.simulShare) {
+      els.simulShare.addEventListener("change", () => {
+        Net.send("set_simultaneous", {
+          gameId: gid,
+          value: els.simulShare.checked,
+        });
+      });
+    }
+    // Host stops a specific sharer via the ✕ on their players-list badge.
+    if (els.players) {
+      els.players.addEventListener("click", (e) => {
+        const btn = e.target.closest(".share-stop");
+        if (btn)
+          Net.send("share_stop", { gameId: gid, targetId: btn.dataset.pid });
+      });
+    }
   }
 
   function setMyId(id) {
@@ -29,7 +61,7 @@ const Wordle = (() => {
     pending = null;
     rejectMsg = null;
     prevRows = 0;
-    typingPeer = null;
+    typingPeers = {};
   }
 
   function reset() {
@@ -39,7 +71,7 @@ const Wordle = (() => {
     pending = null;
     rejectMsg = null;
     prevRows = 0;
-    typingPeer = null;
+    typingPeers = {};
   }
 
   function board() {
@@ -57,7 +89,7 @@ const Wordle = (() => {
       buffer = "";
       pending = null;
       rejectMsg = null;
-      typingPeer = null;
+      typingPeers = {};
       prevRows = s.board.rows.length;
     }
     render();
@@ -65,7 +97,7 @@ const Wordle = (() => {
 
   function onFeed(ev) {
     if (ev.kind === "typing") {
-      typingPeer = { name: ev.name, text: ev.text || "" };
+      typingPeers[ev.pid] = { name: ev.name, text: ev.text || "" };
       renderBoard();
       renderFeed();
     }
@@ -125,7 +157,20 @@ const Wordle = (() => {
     }, 360);
   }
 
+  // --- sharing helpers ---
+  function iAmSharing() {
+    return !!snap && (snap.sharers || []).includes(myId);
+  }
+  function iAmHost() {
+    return !!snap && snap.owner === myId;
+  }
+  function colorOf(pid) {
+    const p = snap && snap.players.find((x) => x.id === pid);
+    return p && safeColor(p.color) ? p.color : "";
+  }
+
   function sendTyping() {
+    if (!iAmSharing()) return; // only broadcast keystrokes while sharing
     const now = performance.now();
     if (now - lastTypingSent >= 90) {
       lastTypingSent = now;
@@ -141,16 +186,39 @@ const Wordle = (() => {
   function renderBoard() {
     const b = board();
     if (!b) return;
-    const current = buffer.length
-      ? buffer
-      : pending
-        ? pending
-        : typingPeer
-          ? typingPeer.text
-          : "";
+
+    // Your own letters are always solid and on top; the cursor shows only while you type.
+    let current = buffer.length ? buffer : pending ? pending : "";
+    let showCursor = !!buffer.length;
+    let tint = null;
+    let ghosts = null;
+
+    const sharers = (snap && snap.sharers) || [];
+    if (snap && snap.simultaneous) {
+      // Everyone overlaid: other sharers' letters ghost beneath your own.
+      ghosts = sharers
+        .filter((pid) => pid !== myId)
+        .map((pid) => ({
+          text: (typingPeers[pid] || {}).text || "",
+          color: colorOf(pid),
+        }))
+        .filter((g) => g.text);
+    } else if (!buffer.length && !pending) {
+      // Exclusive mode: an idle viewer mirrors the single sharer, tinted in their colour.
+      const sharerPid = sharers.find((pid) => pid !== myId);
+      if (sharerPid) {
+        current = (typingPeers[sharerPid] || {}).text || "";
+        tint = colorOf(sharerPid);
+        showCursor = false;
+      }
+    }
+
     Board.render({
       rows: b.rows,
       current,
+      showCursor,
+      tint,
+      ghosts,
       wordLength: b.wordLength,
       maxGuesses: b.maxGuesses,
     });
@@ -161,9 +229,20 @@ const Wordle = (() => {
       els.players.innerHTML = "";
       return;
     }
+    const sharers = snap.sharers || [];
+    const host = iAmHost();
     const parts = snap.players.map((p) => {
       const style = safeColor(p.color) ? ` style="color:${p.color}"` : "";
-      return `<span class="dot"${style}>●</span>${escapeHtml(p.name)}`;
+      let badge = "";
+      if (sharers.includes(p.id)) {
+        // The host can stop a specific sharer; everyone else just sees the indicator.
+        badge = host
+          ? ` <button class="share-stop" data-pid="${escapeHtml(
+              p.id,
+            )}" title="stop ${escapeHtml(p.name)} sharing">📡✕</button>`
+          : ` <span class="share-badge" title="sharing">📡</span>`;
+      }
+      return `<span class="dot"${style}>●</span>${escapeHtml(p.name)}${badge}`;
     });
     els.players.innerHTML = parts.join(" ");
   }
@@ -200,10 +279,32 @@ const Wordle = (() => {
     const last = durable[durable.length - 1];
     if (last) lines.push(`<div>${fmtFeed(last)}</div>`);
     if (rejectMsg) lines.push(`<div class="reject">${rejectMsg}</div>`);
-    if (typingPeer && !buffer.length && isPlaying()) {
-      lines.push(`<div class="typing">${typingPeer.name} is typing…</div>`);
-    }
     els.feed.innerHTML = lines.join("");
+  }
+
+  // Personal "share my typing" checkbox + host-only allow/simultaneous checkboxes.
+  function renderShareControls() {
+    const playing = isPlaying();
+    const allow = !!snap.allowSharing;
+    const simul = !!snap.simultaneous;
+    const mine = iAmSharing();
+
+    if (els.shareMineRow) {
+      els.shareMineRow.hidden = !playing || !allow;
+      els.shareMine.checked = mine;
+      // In exclusive mode you can only claim sharing when nobody else holds it.
+      const blocked = !simul && !mine && (snap.sharers || []).length > 0;
+      els.shareMine.disabled = blocked;
+    }
+    if (els.allowShareRow) {
+      els.allowShareRow.hidden = !playing || !iAmHost();
+      els.allowShare.checked = allow;
+    }
+    if (els.simulShareRow) {
+      els.simulShareRow.hidden = !playing || !iAmHost();
+      els.simulShare.checked = simul;
+      els.simulShare.disabled = !allow;
+    }
   }
 
   function render() {
@@ -211,6 +312,7 @@ const Wordle = (() => {
     renderPlayers();
     renderStatus();
     renderFeed();
+    renderShareControls();
     if (els.delete) els.delete.hidden = !(snap.owner && snap.owner === myId);
     Keyboard.setHints(board().keyboard);
   }

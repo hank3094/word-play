@@ -194,6 +194,9 @@ async def create_game(
         "players": players,
         "state": mod.create_state(options),
         "feed": [],
+        "allow_sharing": True,  # host master switch for live-typing screen sharing
+        "simultaneous": False,  # False = one sharer at a time; True = everyone shares at once
+        "sharers": [],  # pids currently sharing their live typing
     }
     await r.sadd(GAMES_SET, gid)
     await _save(blob)
@@ -205,6 +208,9 @@ async def join_game(pid: str, gid: str, name: str, *, color: str | None = None) 
     if not blob:
         return None
     blob["players"][pid] = {"name": (name or "PLAYER")[:16], "color": _validate_color(color or "")}
+    # In simultaneous mode everyone shares by default, so a late joiner starts sharing too.
+    if blob.get("allow_sharing", True) and blob.get("simultaneous") and pid not in blob["sharers"]:
+        blob["sharers"].append(pid)
     await _save(blob)
     return _snapshot(blob)
 
@@ -215,6 +221,8 @@ async def leave_game(pid: str, gid: str) -> bool:
     if not blob or pid not in blob["players"]:
         return False
     del blob["players"][pid]
+    if pid in blob.get("sharers", []):
+        blob["sharers"].remove(pid)
     mod = get_game_type(blob["type"])
     if not blob["players"] and mod and mod.is_finished(blob["state"]):
         await _delete(gid)
@@ -236,6 +244,71 @@ async def _delete(gid: str) -> None:
     r = get_client()
     await r.srem(GAMES_SET, gid)
     await r.delete(_gkey(gid))
+
+
+# --- live-typing screen sharing ----------------------------------------------------------------
+# ``sharers`` is the authoritative set of pids whose live typing is mirrored to others. In exclusive
+# mode at most one pid may be in it; in simultaneous mode any number may. The host (owner) toggles
+# ``allow_sharing`` (master switch) and ``simultaneous`` (one-at-a-time vs everyone-at-once).
+
+
+async def share_start(pid: str, gid: str) -> bool:
+    """A player opts to share their typing. Returns True if the sharer set changed."""
+    blob = await _load(gid)
+    if not blob or pid not in blob["players"] or not blob.get("allow_sharing", True):
+        return False
+    sharers = blob.setdefault("sharers", [])
+    if pid in sharers:
+        return False
+    if not blob.get("simultaneous") and sharers:
+        return False  # exclusive mode and someone else is already sharing
+    sharers.append(pid)
+    await _save(blob)
+    return True
+
+
+async def share_stop(pid: str, gid: str, target: str | None = None) -> bool:
+    """Stop a player's sharing. A player may stop themselves; the owner may stop anyone."""
+    blob = await _load(gid)
+    if not blob:
+        return False
+    target = target or pid
+    if target != pid and blob.get("owner") != pid:
+        return False  # only the owner may stop someone else
+    if target not in blob.get("sharers", []):
+        return False
+    blob["sharers"].remove(target)
+    await _save(blob)
+    return True
+
+
+async def set_allow_sharing(pid: str, gid: str, allowed: bool) -> bool:
+    """Owner toggles the master sharing switch. Turning it off ends all sharing."""
+    blob = await _load(gid)
+    if not blob or blob.get("owner") != pid:
+        return False
+    blob["allow_sharing"] = bool(allowed)
+    if not allowed:
+        blob["sharers"] = []
+    await _save(blob)
+    return True
+
+
+async def set_simultaneous(pid: str, gid: str, value: bool) -> bool:
+    """Owner switches between one-at-a-time and everyone-at-once sharing.
+
+    Switching to simultaneous shares everyone by default; switching back leaves it unclaimed.
+    """
+    blob = await _load(gid)
+    if not blob or blob.get("owner") != pid:
+        return False
+    blob["simultaneous"] = bool(value)
+    if value:
+        blob["sharers"] = list(blob["players"]) if blob.get("allow_sharing", True) else []
+    else:
+        blob["sharers"] = []
+    await _save(blob)
+    return True
 
 
 async def apply_action(gid: str, pid: str, name: str, action: str, data: dict) -> dict:
@@ -304,6 +377,9 @@ def _snapshot(blob: dict) -> dict:
         "players": players,
         "feed": blob["feed"],
         "board": board,
+        "allowSharing": blob.get("allow_sharing", True),
+        "simultaneous": blob.get("simultaneous", False),
+        "sharers": blob.get("sharers", []),
     }
 
 

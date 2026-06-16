@@ -9,12 +9,19 @@ const Board = (() => {
     root = el;
   }
 
-  // rows: [{word, marks}], current: the live text in the next row, length: word length.
+  // rows: [{word, marks}]. The active row shows the live letters:
+  //   current  — your own (or a single exclusive sharer's) letters, drawn solid on top.
+  //   showCursor — whether to show the next-cell cursor (true only when it's your own typing).
+  //   tint     — colour for a single exclusive sharer's mirrored letters (pastel tile fill).
+  //   ghosts   — [{text, color}] from other simultaneous sharers, overlaid beneath at low opacity.
   function render({
     rows = [],
     current = "",
+    showCursor = true,
     wordLength = 5,
     maxGuesses = 6,
+    tint = null,
+    ghosts = null,
   } = {}) {
     cols = wordLength;
     maxRows = maxGuesses;
@@ -33,11 +40,27 @@ const Board = (() => {
           tile.textContent = filled.word[c] || "";
           tile.classList.add(filled.marks[c]); // hit | present | miss
         } else if (isActive) {
+          // Other sharers' letters first, stacked beneath, each in their own colour.
+          if (ghosts) {
+            for (const g of ghosts) {
+              const ch = (g.text || "")[c];
+              if (!ch) continue;
+              const span = document.createElement("span");
+              span.className = "tile-ghost";
+              span.textContent = ch;
+              if (g.color) span.style.color = g.color;
+              tile.appendChild(span);
+            }
+          }
           const ch = current[c];
           if (ch) {
-            tile.textContent = ch;
+            // A text node keeps the solid letter on top of any ghost spans.
+            tile.appendChild(document.createTextNode(ch));
             tile.classList.add("filled");
-          } else if (c === current.length) {
+            if (tint) {
+              tile.style.background = `color-mix(in srgb, ${tint} 30%, var(--panel))`;
+            }
+          } else if (showCursor && c === current.length) {
             tile.classList.add("cursor"); // next cell to fill
           }
         }
