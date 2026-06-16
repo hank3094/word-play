@@ -16,7 +16,7 @@ async def _clean(transactional_db):
 
 @pytest.fixture
 def fixed_answer(monkeypatch):
-    monkeypatch.setattr(wordle, "pick_word", lambda: "crane")
+    monkeypatch.setattr(wordle, "pick_word", lambda word_length=5: "crane")
     return "crane"
 
 

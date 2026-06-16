@@ -403,10 +403,24 @@ body {
   cursor: pointer;
   font-size: 17px;
 }
+.radio-row.inline {
+  padding: 4px 6px;
+}
 .radio-row input {
   width: 20px;
   height: 20px;
   accent-color: var(--accent);
+}
+.word-length-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 4px;
+  flex-wrap: wrap;
+}
+.word-length-options {
+  display: flex;
+  gap: 4px;
 }
 .custom-word {
   margin: 6px 0 4px;

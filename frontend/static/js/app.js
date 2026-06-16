@@ -200,7 +200,13 @@
       wordInput: document.getElementById("custom-word"),
       toggle: document.getElementById("toggle-word"),
       error: document.getElementById("new-game-error"),
+      hint: document.getElementById("word-length-hint"),
     };
+  }
+
+  function selectedWordLength(form) {
+    const radio = form.querySelector('input[name="word-length"]:checked');
+    return radio ? parseInt(radio.value, 10) : 5;
   }
 
   function openNewGameModal() {
@@ -208,9 +214,12 @@
     el.form.reset();
     el.customRow.hidden = true;
     el.wordInput.value = "";
+    el.wordInput.maxLength = 5; // reset alongside the word-length radio (which resets to 5)
     el.wordInput.type = "password"; // masked by default
     el.toggle.setAttribute("aria-pressed", "false");
     el.error.hidden = true;
+    if (el.hint)
+      el.hint.textContent = "5 letters — your friends will try to guess it.";
     el.modal.hidden = false;
   }
 
@@ -229,7 +238,7 @@
   function wireNewGameModal() {
     const el = modalEls();
 
-    // Show/hide the custom-word row with the radio choice.
+    // Show/hide the custom-word row with the word-mode radio choice.
     el.form.querySelectorAll('input[name="word-mode"]').forEach((radio) => {
       radio.addEventListener("change", () => {
         const custom =
@@ -238,6 +247,17 @@
         el.customRow.hidden = !custom;
         el.error.hidden = true;
         if (custom) el.wordInput.focus();
+      });
+    });
+
+    // Update maxlength and hint text when word length changes.
+    el.form.querySelectorAll('input[name="word-length"]').forEach((radio) => {
+      radio.addEventListener("change", () => {
+        const len = parseInt(radio.value, 10);
+        el.wordInput.maxLength = len;
+        if (el.hint)
+          el.hint.textContent = `${len} letters — your friends will try to guess it.`;
+        el.error.hidden = true;
       });
     });
 
@@ -258,20 +278,27 @@
 
     el.form.addEventListener("submit", (e) => {
       e.preventDefault();
+      const len = selectedWordLength(el.form);
       const custom =
         el.form.querySelector('input[name="word-mode"]:checked').value ===
         "custom";
       if (!custom) {
-        Net.send("create_game", { gameType: "wordle" });
+        Net.send("create_game", {
+          gameType: "wordle",
+          options: { wordLength: len },
+        });
         return;
       }
       const word = el.wordInput.value.trim().toLowerCase();
-      if (!/^[a-z]{5}$/.test(word)) {
-        showModalError("The word must be 5 letters.");
+      if (!new RegExp(`^[a-z]{${len}}$`).test(word)) {
+        showModalError(`The word must be ${len} letters.`);
         return;
       }
       el.error.hidden = true;
-      Net.send("create_game", { gameType: "wordle", options: { word } });
+      Net.send("create_game", {
+        gameType: "wordle",
+        options: { wordLength: len, word },
+      });
       // The modal closes when we enter the game (the `game` message) or shows a server error.
     });
   }

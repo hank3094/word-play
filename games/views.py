@@ -34,6 +34,11 @@ def history(request):
                     "answer": r.answer,
                     "won": r.won,
                     "guessesUsed": r.guesses_used,
+                    "maxGuesses": (
+                        r.snapshot["board"]["maxGuesses"]
+                        if r.snapshot and "board" in r.snapshot
+                        else 6
+                    ),
                     "players": r.player_names.split(",") if r.player_names else [],
                     "at": r.created_at.isoformat(),
                     "hasSnapshot": r.snapshot is not None,

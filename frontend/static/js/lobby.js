@@ -45,7 +45,7 @@ const Lobby = (() => {
     for (const g of games) {
       const li = document.createElement("li");
       li.className = "game-row";
-      const label = g.gameType.toUpperCase();
+      const label = `${g.gameType.toUpperCase()} (${g.wordLength || 5})`;
       const who = g.players.length ? g.players.join(", ") : "empty";
       const statusBadge =
         g.status === "playing"
@@ -94,7 +94,9 @@ const Lobby = (() => {
         `<span class="meta">${escapeHtml(
           (h.players || []).join(", "),
         )}</span></span>` +
-        `<span class="badge ${outcome}">${outcome} ${h.guessesUsed}/6</span>` +
+        `<span class="badge ${outcome}">${outcome} ${h.guessesUsed}/${
+          h.maxGuesses || 6
+        }</span>` +
         viewBtn;
       els.history.appendChild(li);
     }

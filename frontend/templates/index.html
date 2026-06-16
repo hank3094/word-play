@@ -159,6 +159,16 @@
                 <span>Choose the word</span>
               </label>
 
+              <div class="word-length-row">
+                <span class="radio-label">Word length</span>
+                <div class="word-length-options">
+                  <label class="radio-row inline"><input type="radio" name="word-length" value="4" /> 4</label>
+                  <label class="radio-row inline"><input type="radio" name="word-length" value="5" checked /> 5</label>
+                  <label class="radio-row inline"><input type="radio" name="word-length" value="6" /> 6</label>
+                  <label class="radio-row inline"><input type="radio" name="word-length" value="7" /> 7</label>
+                </div>
+              </div>
+
               <div id="custom-word-row" class="custom-word" hidden>
                 <div class="word-input-wrap">
                   <input
@@ -171,6 +181,7 @@
                     autocorrect="off"
                     spellcheck="false"
                     placeholder="SECRET WORD"
+                    data-dynamic-maxlength
                   />
                   <button
                     type="button"
@@ -183,7 +194,7 @@
                     👁
                   </button>
                 </div>
-                <p class="hint-text">5 letters — your friends will try to guess it.</p>
+                <p id="word-length-hint" class="hint-text">5 letters — your friends will try to guess it.</p>
               </div>
 
               <p id="new-game-error" class="error-text" hidden></p>

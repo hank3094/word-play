@@ -1,8 +1,8 @@
 """Word lists for the Wordle game, loaded once from the shipped text files.
 
-``answers`` is a curated set of common, friendly five-letter words used as secret words.
-``allowed`` is a larger dictionary of valid guesses (sourced from a system word list). A guess is
-valid if it is in either set, so every answer is always a legal guess.
+Per-length files (``answers_4.txt``, ``allowed_6.txt``, etc.) are used when present;
+otherwise falls back to the original ``answers.txt`` / ``allowed.txt`` (5-letter defaults).
+A guess is valid if it is in either set, so every answer is always a legal guess.
 """
 
 from functools import cache
@@ -17,12 +17,16 @@ def _load(name: str) -> frozenset[str]:
 
 
 @cache
-def answers() -> tuple[str, ...]:
-    """Curated secret-word pool, as an ordered tuple (so random.choice is stable per seed)."""
-    return tuple(sorted(_load("answers.txt")))
+def answers(word_length: int = 5) -> tuple[str, ...]:
+    """Curated secret-word pool for the given length, as a sorted tuple."""
+    specific = f"answers_{word_length}.txt"
+    name = specific if (_WORDS_DIR / specific).exists() else "answers.txt"
+    return tuple(sorted(_load(name)))
 
 
 @cache
-def allowed() -> frozenset[str]:
-    """All words accepted as a guess: the dictionary plus every answer."""
-    return _load("allowed.txt") | frozenset(answers())
+def allowed(word_length: int = 5) -> frozenset[str]:
+    """All words accepted as a guess: the per-length dictionary plus every answer."""
+    specific = f"allowed_{word_length}.txt"
+    name = specific if (_WORDS_DIR / specific).exists() else "allowed.txt"
+    return _load(name) | frozenset(answers(word_length))

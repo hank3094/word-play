@@ -139,7 +139,8 @@ const Wordle = (() => {
 
   function rejectText(reason) {
     const w = (pending || "").toUpperCase();
-    if (reason === "length") return "guesses must be 5 letters";
+    if (reason === "length")
+      return `guesses must be ${board().wordLength} letters`;
     if (reason === "finished") return "this game is already over";
     // "unknown" or anything else: the word isn't in our list
     return w ? `“${w}” isn’t in the word list` : "that isn’t in the word list";

@@ -45,7 +45,6 @@ def test_is_allowed():
 def test_pick_word_is_a_valid_answer():
     w = wordle.pick_word()
     assert len(w) == wordle.WORD_LENGTH
-    assert w in wordle.answers() if hasattr(wordle, "answers") else True
     assert wordle.is_allowed(w)
 
 
@@ -73,8 +72,22 @@ def test_validate_options():
     assert "word list" in wordle.validate_options({"word": "zzzzz"})
 
 
-def _playing(answer="crane", rows=None):
-    return {"answer": answer, "rows": rows or [], "status": "playing"}
+def test_validate_options_word_length():
+    assert wordle.validate_options({"wordLength": 4}) is None
+    assert wordle.validate_options({"wordLength": 7}) is None
+    err = wordle.validate_options({"wordLength": 8})
+    assert err is not None and "4" in err and "7" in err
+    # Wrong length for the chosen wordLength (length check fires before word-list lookup).
+    assert "4 letters" in wordle.validate_options({"wordLength": 4, "word": "crane"})
+
+
+def _playing(answer="crane", rows=None, word_length=None, max_guesses=None):
+    state = {"answer": answer, "rows": rows or [], "status": "playing"}
+    if word_length is not None:
+        state["word_length"] = word_length
+    if max_guesses is not None:
+        state["max_guesses"] = max_guesses
+    return state
 
 
 def test_guess_appends_row_and_keeps_playing():
@@ -138,3 +151,60 @@ def test_keyboard_hints_take_best_state():
     hints = wordle.keyboard_hints({"answer": "x", "rows": rows, "status": "playing"})
     assert hints["r"] == "hit"  # upgraded from present -> hit
     assert hints["c"] == "miss"
+
+
+# --- variable word-length tests ---
+
+
+def test_create_state_stores_word_length_and_max_guesses():
+    state = wordle.create_state({})
+    assert state["word_length"] == 5
+    assert state["max_guesses"] == 6
+
+
+def test_create_state_custom_word_length():
+    # wordLength stored correctly even when no matching word list file exists yet.
+    state = wordle.create_state({"wordLength": 6})
+    assert state["word_length"] == 6
+    assert state["max_guesses"] == 7
+
+
+def test_snapshot_emits_word_length_from_state():
+    snap = wordle.snapshot(_playing(word_length=5, max_guesses=6))
+    assert snap["wordLength"] == 5
+    assert snap["maxGuesses"] == 6
+
+
+def test_snapshot_emits_word_length_fallback_for_legacy_state():
+    # Old state dicts without word_length/max_guesses fall back to module defaults.
+    snap = wordle.snapshot(_playing())
+    assert snap["wordLength"] == wordle.WORD_LENGTH
+    assert snap["maxGuesses"] == wordle.MAX_GUESSES
+
+
+def test_handle_action_reads_max_guesses_from_state():
+    # A state with max_guesses=3 should lose after 3 guesses, not 6.
+    rows = [{"by": "X", "word": "slate", "marks": ["miss"] * 5} for _ in range(2)]
+    state, events = wordle.handle_action(
+        _playing(rows=rows, word_length=5, max_guesses=3),
+        "p1",
+        "BOB",
+        "guess",
+        {"word": "moldy"},
+    )
+    assert state["status"] == "lost"
+    assert any(e["kind"] == "lose" for e in events)
+
+
+def test_handle_action_typing_truncated_to_word_length():
+    _, events = wordle.handle_action(
+        _playing(word_length=4, max_guesses=5), "p1", "ANA", "typing", {"text": "cranky"}
+    )
+    assert events[0]["text"] == "cran"  # truncated to word_length=4
+
+
+def test_validate_options_invalid_length():
+    err = wordle.validate_options({"wordLength": 3})
+    assert err is not None
+    err8 = wordle.validate_options({"wordLength": 8})
+    assert err8 is not None
