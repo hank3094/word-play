@@ -62,9 +62,14 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Filter source to exactly N-letter alphabetic words.
+    # Supports both plain lists (one word per line) and definition-format files like CSW
+    # where the word is the first whitespace-separated token on each line.
     raw: set[str] = set()
     for line in src.read_text(encoding="utf-8", errors="ignore").splitlines():
-        w = line.strip().lower()
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        w = line.split()[0].lower()
         if len(w) == n and w.isalpha():
             raw.add(w)
 
