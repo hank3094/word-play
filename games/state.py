@@ -18,6 +18,7 @@ Read-modify-write of a game blob is not atomic across awaits; for the intended c
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 
@@ -39,8 +40,18 @@ def _ckey(pid: str) -> str:
     return f"wp:pconn:{pid}"
 
 
+def _clrkey(pid: str) -> str:
+    return f"wp:pcolor:{pid}"
+
+
 def _gkey(gid: str) -> str:
     return f"wp:game:{gid}"
+
+
+def _validate_color(color: str) -> str:
+    """Accept only #rrggbb hex strings; reject anything else."""
+    c = (color or "").strip().lower()
+    return c if re.fullmatch(r"#[0-9a-f]{6}", c) else ""
 
 
 # --- presence --------------------------------------------------------------------------------
@@ -52,11 +63,12 @@ def _gkey(gid: str) -> str:
 # the set within ALIVE_TTL.
 
 
-async def register(pid: str, name: str) -> None:
+async def register(pid: str, name: str, color: str = "") -> None:
     r = get_client()
     name = (name or "PLAYER")[:16]
     await r.sadd(PLAYERS_SET, pid)
     await r.set(_nkey(pid), name, ex=ALIVE_TTL)
+    await r.set(_clrkey(pid), _validate_color(color), ex=ALIVE_TTL)
     await r.incr(_ckey(pid))
     await r.expire(_ckey(pid), ALIVE_TTL)
 
@@ -67,19 +79,28 @@ async def touch(pid: str) -> None:
     if await r.exists(_nkey(pid)):
         await r.expire(_nkey(pid), ALIVE_TTL)
         await r.expire(_ckey(pid), ALIVE_TTL)
+        await r.expire(_clrkey(pid), ALIVE_TTL)
 
 
-async def set_name(pid: str, name: str) -> list[str]:
-    """Rename a player everywhere (presence + any games they're in). Returns affected game ids."""
+async def set_name(pid: str, name: str, color: str | None = None) -> list[str]:
+    """Rename (and optionally recolor) a player everywhere. Returns affected game ids."""
     r = get_client()
     name = (name or "PLAYER")[:16]
     await r.set(_nkey(pid), name, ex=ALIVE_TTL)
+    if color is not None:
+        await r.set(_clrkey(pid), _validate_color(color), ex=ALIVE_TTL)
     await r.sadd(PLAYERS_SET, pid)
     affected = []
     for gid in await r.smembers(GAMES_SET):
         blob = await _load(gid)
         if blob and pid in blob["players"]:
-            blob["players"][pid] = name
+            p = blob["players"][pid]
+            new_color = (
+                _validate_color(color)
+                if color is not None
+                else (p.get("color", "") if isinstance(p, dict) else "")
+            )
+            blob["players"][pid] = {"name": name, "color": new_color}
             await _save(blob)
             affected.append(gid)
     return affected
@@ -96,6 +117,7 @@ async def unregister(pid: str) -> list[str]:
     await r.srem(PLAYERS_SET, pid)
     await r.delete(_nkey(pid))
     await r.delete(_ckey(pid))
+    await r.delete(_clrkey(pid))
     affected = []
     for gid in list(await r.smembers(GAMES_SET)):
         if await leave_game(pid, gid):
@@ -112,7 +134,8 @@ async def players_snapshot() -> list[dict]:
         if name is None:
             await r.srem(PLAYERS_SET, pid)  # TTL lapsed -> gone
             continue
-        out.append({"id": pid, "name": name})
+        color = (await r.get(_clrkey(pid))) or ""
+        out.append({"id": pid, "name": name, "color": color})
     return out
 
 
@@ -146,13 +169,19 @@ async def create_game(
     pid: str | None = None,
     name: str | None = None,
     options: dict | None = None,
+    *,
+    color: str | None = None,
 ) -> str | None:
     mod = get_game_type(game_type)
     if mod is None:
         return None
     r = get_client()
     gid = uuid.uuid4().hex[:8]
-    players = {pid: (name or "PLAYER")[:16]} if pid else {}
+    players = (
+        {pid: {"name": (name or "PLAYER")[:16], "color": _validate_color(color or "")}}
+        if pid
+        else {}
+    )
     blob = {
         "id": gid,
         "type": game_type,
@@ -168,11 +197,11 @@ async def create_game(
     return gid
 
 
-async def join_game(pid: str, gid: str, name: str) -> dict | None:
+async def join_game(pid: str, gid: str, name: str, *, color: str | None = None) -> dict | None:
     blob = await _load(gid)
     if not blob:
         return None
-    blob["players"][pid] = (name or "PLAYER")[:16]
+    blob["players"][pid] = {"name": (name or "PLAYER")[:16], "color": _validate_color(color or "")}
     await _save(blob)
     return _snapshot(blob)
 
@@ -240,14 +269,13 @@ async def apply_action(gid: str, pid: str, name: str, action: str, data: dict) -
     await _save(blob)
 
     finished_now = mod.is_finished(new_state) and not was_finished
+    player_names = [d["name"] if isinstance(d, dict) else d for d in blob["players"].values()]
     return {
         "ok": True,
         "changed": True,
         "events": events,
         "finished": finished_now,
-        "result": (mod.result(new_state) | {"players": list(blob["players"].values())})
-        if finished_now
-        else None,
+        "result": (mod.result(new_state) | {"players": player_names}) if finished_now else None,
         "snapshot": _snapshot(blob),
     }
 
@@ -257,12 +285,20 @@ def _snapshot(blob: dict) -> dict:
     board = mod.snapshot(blob["state"]) if mod else {}
     # Note: ``gameType`` (not ``type``) so spreading a snapshot into a WS message can't clobber the
     # message envelope's ``type`` field. ``board`` is the game-type's own view.
+    players = [
+        {
+            "id": pid,
+            "name": d["name"] if isinstance(d, dict) else d,
+            "color": d.get("color", "") if isinstance(d, dict) else "",
+        }
+        for pid, d in blob["players"].items()
+    ]
     return {
         "id": blob["id"],
         "gameType": blob["type"],
         "owner": blob.get("owner"),
         "status": blob["status"],
-        "players": [{"id": pid, "name": nm} for pid, nm in blob["players"].items()],
+        "players": players,
         "feed": blob["feed"],
         "board": board,
     }
@@ -281,6 +317,7 @@ async def list_games() -> list[dict]:
         if not blob:
             await r.srem(GAMES_SET, gid)
             continue
+        player_names = [d["name"] if isinstance(d, dict) else d for d in blob["players"].values()]
         out.append(
             {
                 "id": blob["id"],
@@ -288,7 +325,7 @@ async def list_games() -> list[dict]:
                 "owner": blob.get("owner"),
                 "status": blob["status"],
                 "count": len(blob["players"]),
-                "players": list(blob["players"].values()),
+                "players": player_names,
             }
         )
     return out

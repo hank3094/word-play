@@ -157,8 +157,25 @@ const Wordle = (() => {
   }
 
   function renderPlayers() {
-    const names = snap.players.map((p) => p.name).join(", ");
-    els.players.textContent = names ? `with ${names}` : "";
+    if (!snap.players.length) {
+      els.players.innerHTML = "";
+      return;
+    }
+    const parts = snap.players.map((p) => {
+      const style = safeColor(p.color) ? ` style="color:${p.color}"` : "";
+      return `<span class="dot"${style}>●</span>${escapeHtml(p.name)}`;
+    });
+    els.players.innerHTML = parts.join(" ");
+  }
+
+  function escapeHtml(str) {
+    const d = document.createElement("div");
+    d.textContent = str == null ? "" : str;
+    return d.innerHTML;
+  }
+
+  function safeColor(c) {
+    return /^#[0-9a-f]{6}$/i.test(c || "") ? c : "";
   }
 
   function renderStatus() {

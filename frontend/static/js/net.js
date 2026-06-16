@@ -5,6 +5,7 @@
 const Net = (() => {
   let ws = null;
   let name = "PLAYER";
+  let color = "";
   let cid = null;
   let pingTimer = null;
   let reconnectTimer = null;
@@ -30,12 +31,13 @@ const Net = (() => {
     return id;
   }
 
-  function connect(playerName) {
+  function connect(playerName, playerColor) {
     name = playerName;
+    color = playerColor || "";
     cid = clientId();
     wantConnection = true;
     if (ws && ws.readyState <= WebSocket.OPEN) {
-      send("set_name", { name });
+      send("set_name", { name, color });
       return;
     }
     openSocket();
@@ -47,7 +49,7 @@ const Net = (() => {
     ws = new WebSocket(API.wsUrl());
     ws.onopen = () => {
       reconnectDelay = 1000; // reset backoff on a good connection
-      send("hello", { name, cid });
+      send("hello", { name, cid, color });
       setStatus("connected");
       startPing();
     };

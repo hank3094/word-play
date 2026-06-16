@@ -203,6 +203,45 @@ body {
   color: var(--fg-dim);
 }
 
+/* colour picker (name-entry screen) */
+.color-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.color-label {
+  color: var(--fg-dim);
+  font-size: 0.85em;
+  flex-shrink: 0;
+}
+.color-swatches {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.swatch {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--c, var(--fg));
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    border-color 0.12s,
+    transform 0.12s;
+  touch-action: manipulation;
+}
+.swatch:hover {
+  transform: scale(1.12);
+}
+.swatch.selected,
+.swatch[aria-pressed="true"] {
+  border-color: var(--fg);
+  transform: scale(1.15);
+}
+
 /* ===== lobby ===== */
 .lobby-head {
   display: flex;

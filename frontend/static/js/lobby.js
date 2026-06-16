@@ -25,7 +25,8 @@ const Lobby = (() => {
     for (const p of players) {
       const li = document.createElement("li");
       const you = p.id === myId ? " (you)" : "";
-      li.innerHTML = `<span><span class="dot">●</span>${escapeHtml(
+      const dotStyle = safeColor(p.color) ? ` style="color:${p.color}"` : "";
+      li.innerHTML = `<span><span class="dot"${dotStyle}>●</span>${escapeHtml(
         p.name,
       )}${you}</span>`;
       els.players.appendChild(li);
@@ -93,6 +94,10 @@ const Lobby = (() => {
     const d = document.createElement("div");
     d.textContent = str == null ? "" : str;
     return d.innerHTML;
+  }
+
+  function safeColor(c) {
+    return /^#[0-9a-f]{6}$/i.test(c || "") ? c : "";
   }
 
   return { init, setMyId, renderPlayers, renderGames, renderHistory };

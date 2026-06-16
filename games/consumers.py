@@ -20,6 +20,7 @@ and the payload is identical for everyone).
 
 from __future__ import annotations
 
+import re
 import uuid
 
 from channels.db import database_sync_to_async
@@ -39,6 +40,11 @@ def _clean_name(value) -> str:
     return (str(value or "PLAYER").strip().upper() or "PLAYER")[:16]
 
 
+def _clean_color(value) -> str:
+    c = (str(value or "")).strip().lower()
+    return c if re.fullmatch(r"#[0-9a-f]{6}", c) else ""
+
+
 @database_sync_to_async
 def _save_finished(result: dict, game_type: str) -> None:
     FinishedGame.objects.create(
@@ -56,6 +62,7 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         # teardown so a socket that never said hello doesn't decrement a phantom connection.
         self.pid = uuid.uuid4().hex[:8]
         self.name = "PLAYER"
+        self.color = ""
         self.registered = False
         self.current_game: str | None = None
         await self.accept()
@@ -95,14 +102,17 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         if cid:
             self.pid = cid
         self.name = _clean_name(content.get("name"))
-        await S.register(self.pid, self.name)
+        self.color = _clean_color(content.get("color"))
+        await S.register(self.pid, self.name, self.color)
         self.registered = True
         await self.send_json({"type": "welcome", "id": self.pid, "name": self.name})
         await self._broadcast_lobby()
 
     async def _set_name(self, content):
         self.name = _clean_name(content.get("name"))
-        affected = await S.set_name(self.pid, self.name)
+        if "color" in content:
+            self.color = _clean_color(content.get("color"))
+        affected = await S.set_name(self.pid, self.name, self.color)
         await self._broadcast_lobby()
         for gid in affected:
             await self._broadcast_game(gid)
@@ -117,13 +127,13 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         if error:
             await self.send_json({"type": "create_error", "error": error})
             return
-        gid = await S.create_game(game_type, self.pid, self.name, options)
+        gid = await S.create_game(game_type, self.pid, self.name, options, color=self.color)
         if gid:
             await self._enter_game(gid)
 
     async def _open_game(self, content):
         gid = str(content.get("gameId", ""))
-        if await S.join_game(self.pid, gid, self.name):
+        if await S.join_game(self.pid, gid, self.name, color=self.color):
             await self._enter_game(gid)
 
     async def _enter_game(self, gid):

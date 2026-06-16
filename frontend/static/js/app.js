@@ -5,6 +5,15 @@
   document.querySelectorAll(".view").forEach((v) => (views[v.id] = v));
 
   const NAME_KEY = "wp-name";
+  const COLOR_KEY = "wp-color";
+  const PLAYER_COLORS = [
+    "#4d7c5a", // green
+    "#4a6fa5", // blue
+    "#a06030", // amber
+    "#7040a0", // purple
+    "#a04040", // red
+    "#30908a", // teal
+  ];
 
   function show(id) {
     document
@@ -22,11 +31,50 @@
     return name;
   }
 
+  function storedColor() {
+    const c = localStorage.getItem(COLOR_KEY) || "";
+    return PLAYER_COLORS.includes(c) ? c : PLAYER_COLORS[0];
+  }
+  function pickColor(hex) {
+    localStorage.setItem(COLOR_KEY, hex);
+    return hex;
+  }
+
   // ---- name entry ----
   function wireNameEntry() {
     const form = document.getElementById("name-form");
     const input = document.getElementById("name-input");
     input.value = storedName();
+
+    // Build colour swatches from the palette.
+    const swatchRow = document.getElementById("color-swatches");
+    if (swatchRow) {
+      PLAYER_COLORS.forEach((hex) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "swatch";
+        btn.dataset.color = hex;
+        btn.style.setProperty("--c", hex);
+        btn.setAttribute("aria-label", hex);
+        swatchRow.appendChild(btn);
+      });
+      function selectSwatch(hex) {
+        swatchRow.querySelectorAll(".swatch").forEach((b) => {
+          b.classList.toggle("selected", b.dataset.color === hex);
+          b.setAttribute(
+            "aria-pressed",
+            b.dataset.color === hex ? "true" : "false",
+          );
+        });
+        pickColor(hex);
+      }
+      selectSwatch(storedColor());
+      swatchRow.addEventListener("click", (e) => {
+        const btn = e.target.closest(".swatch");
+        if (btn) selectSwatch(btn.dataset.color);
+      });
+    }
+
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const name = setName(input.value);
@@ -37,7 +85,7 @@
   // ---- lobby ----
   function enterLobby(name) {
     document.getElementById("you-name").textContent = name;
-    Net.connect(name);
+    Net.connect(name, storedColor());
     refreshHistory();
     show("lobby");
   }
