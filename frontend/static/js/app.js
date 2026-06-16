@@ -121,12 +121,72 @@
       .addEventListener("click", openNewGameModal);
     wireNewGameModal();
 
-    document.getElementById("edit-name").addEventListener("click", () => {
-      const next = prompt("Your name:", storedName());
-      if (next == null) return;
-      const name = setName(next);
+    document
+      .getElementById("edit-name")
+      .addEventListener("click", openEditProfileModal);
+    wireEditProfileModal();
+  }
+
+  // ---- edit profile modal ----
+  function openEditProfileModal() {
+    const modal = document.getElementById("edit-profile-modal");
+    const input = document.getElementById("edit-name-input");
+    input.value = storedName();
+    selectEditSwatch(storedColor());
+    modal.hidden = false;
+    input.focus();
+    input.select();
+  }
+
+  function selectEditSwatch(hex) {
+    document
+      .getElementById("edit-color-swatches")
+      .querySelectorAll(".swatch")
+      .forEach((b) => {
+        b.classList.toggle("selected", b.dataset.color === hex);
+        b.setAttribute(
+          "aria-pressed",
+          b.dataset.color === hex ? "true" : "false",
+        );
+      });
+  }
+
+  function wireEditProfileModal() {
+    const modal = document.getElementById("edit-profile-modal");
+    const form = document.getElementById("edit-profile-form");
+    const swatchRow = document.getElementById("edit-color-swatches");
+
+    PLAYER_COLORS.forEach((hex) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "swatch";
+      btn.dataset.color = hex;
+      btn.style.setProperty("--c", hex);
+      btn.setAttribute("aria-label", hex);
+      swatchRow.appendChild(btn);
+    });
+
+    swatchRow.addEventListener("click", (e) => {
+      const btn = e.target.closest(".swatch");
+      if (btn) selectEditSwatch(btn.dataset.color);
+    });
+
+    modal.addEventListener("click", (e) => {
+      if (e.target.closest('[data-modal="cancel"]') || e.target === modal) {
+        modal.hidden = true;
+      }
+    });
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = setName(document.getElementById("edit-name-input").value);
+      const color =
+        swatchRow.querySelector(".swatch.selected")?.dataset.color ||
+        storedColor();
+      pickColor(color);
       document.getElementById("you-name").textContent = name;
-      Net.send("set_name", { name });
+      modal.hidden = true;
+      Net.send("set_name", { name, color });
     });
   }
 

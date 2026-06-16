@@ -102,6 +102,37 @@
           <div id="keyboard" class="keyboard"></div>
         </section>
 
+        <!-- ===== EDIT PROFILE MODAL ===== -->
+        <div id="edit-profile-modal" class="modal" hidden>
+          <div class="modal-card">
+            <h2 class="modal-h">Your profile</h2>
+            <form id="edit-profile-form">
+              <input
+                id="edit-name-input"
+                class="text-input"
+                type="text"
+                maxlength="16"
+                autocomplete="off"
+                autocapitalize="characters"
+                placeholder="YOUR NAME"
+              />
+              <div class="color-row" style="margin-top: 12px">
+                <span class="color-label">Colour</span>
+                <div
+                  id="edit-color-swatches"
+                  class="color-swatches"
+                  role="radiogroup"
+                  aria-label="player colour"
+                ></div>
+              </div>
+              <div class="modal-actions">
+                <button type="button" class="btn" data-modal="cancel">CANCEL</button>
+                <button type="submit" class="btn btn-primary">SAVE</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
         <!-- ===== NEW GAME MODAL ===== -->
         <div id="new-game-modal" class="modal" hidden>
           <div class="modal-card">
