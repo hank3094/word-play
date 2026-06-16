@@ -128,10 +128,15 @@ const Activity = (() => {
   // --- public API ---
 
   function setCurrentGame(gid) {
+    const changed = gid !== currentGame;
     currentGame = gid;
-    filterToGame = !!gid;
-    els.gameFilter.checked = filterToGame;
     els.gameFilterRow.hidden = !gid;
+    // Only (re)default the filter on a genuine enter/leave — not on a reconnect re-sync, where the
+    // same game id arrives again and the user's checkbox choice must be preserved.
+    if (changed) {
+      filterToGame = !!gid;
+      els.gameFilter.checked = filterToGame;
+    }
     render();
   }
 

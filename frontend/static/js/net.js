@@ -13,9 +13,20 @@ const Net = (() => {
   let wantConnection = false; // true once connect() is called; keeps us reconnecting
   const handlers = {};
   let statusCb = null;
+  let pendingCb = null;
+
+  // A single "most recent action fired while disconnected" slot. We never queue: a newer action
+  // overwrites the older, so only the latest is replayed once we reconnect. Heartbeat pings and
+  // live-typing keystrokes are transient — they'd be stale on replay, so they're dropped instead.
+  let pendingAction = null;
+  const TRANSIENT = new Set(["ping", "typing"]);
 
   function setStatus(s) {
     if (statusCb) statusCb(s);
+  }
+
+  function setPending(active) {
+    if (pendingCb) pendingCb(active);
   }
 
   // A stable per-browser id so a refresh / second tab is recognised as the same player rather than
@@ -56,6 +67,9 @@ const Net = (() => {
     ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data);
       (handlers[msg.type] || []).forEach((h) => h(msg));
+      // Flush a deferred action on welcome, AFTER its handlers run: the welcome handler re-sends
+      // open_game to rejoin the game server-side, which must precede a replayed game_action.
+      if (msg.type === "welcome") flushPending();
     };
     ws.onclose = () => {
       stopPing();
@@ -82,6 +96,28 @@ const Net = (() => {
   function send(type, payload = {}) {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type, ...payload }));
+      return;
+    }
+    // Disconnected. Transient messages are pointless to replay; drop them silently.
+    if (TRANSIENT.has(type)) return;
+    // Remember only the most recent action and show the spinner until it runs.
+    pendingAction = { type, payload };
+    setPending(true);
+    // Kick an immediate reconnect rather than waiting out the backoff timer.
+    if (!ws || ws.readyState === WebSocket.CLOSED) {
+      reconnectDelay = 1000;
+      openSocket();
+    }
+  }
+
+  function flushPending() {
+    if (pendingAction && ws && ws.readyState === WebSocket.OPEN) {
+      const { type, payload } = pendingAction;
+      ws.send(JSON.stringify({ type, ...payload }));
+    }
+    if (pendingAction) {
+      pendingAction = null;
+      setPending(false);
     }
   }
 
@@ -103,6 +139,7 @@ const Net = (() => {
     send,
     on,
     setStatusCb: (cb) => (statusCb = cb),
+    setPendingCb: (cb) => (pendingCb = cb),
     myName: () => name,
   };
 })();

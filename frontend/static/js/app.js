@@ -330,6 +330,12 @@
       if (el) el.textContent = s === "connected" ? "" : s;
     });
 
+    // Spinner shown only while an action fired during a disconnect waits to execute.
+    const overlay = document.getElementById("reconnect-overlay");
+    Net.setPendingCb((active) => {
+      if (overlay) overlay.hidden = !active;
+    });
+
     Net.on("welcome", (m) => {
       Lobby.setMyId(m.id);
       Wordle.setMyId(m.id);

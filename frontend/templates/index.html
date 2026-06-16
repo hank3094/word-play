@@ -218,6 +218,12 @@
       <button id="activity-toggle" class="btn btn-small activity-toggle-btn">LOG</button>
     </div>
 
+    <!-- Shown only while an action fired during a disconnect waits to execute. -->
+    <div id="reconnect-overlay" class="reconnect-overlay" hidden>
+      <span class="spinner" aria-hidden="true"></span>
+      <span>reconnecting…</span>
+    </div>
+
     <script src="{% static 'js/api.js' %}"></script>
     <script src="{% static 'js/net.js' %}"></script>
     <script src="{% static 'js/keyboard.js' %}"></script>
