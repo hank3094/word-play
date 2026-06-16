@@ -538,13 +538,17 @@ body {
   display: grid;
   grid-auto-rows: 1fr;
   gap: 6px;
-  /* size to the smaller of available width / height so it never overflows */
-  width: min(330px, 72vw, 42vh);
-  aspect-ratio: 5 / 6;
+  /* Width scales with column count; third term converts the height budget to an equivalent width. */
+  width: min(
+    calc(var(--cols, 5) * 62px),
+    92vw,
+    calc(var(--cols, 5) / var(--rows, 6) * 80vh)
+  );
+  aspect-ratio: var(--cols, 5) / var(--rows, 6);
 }
 .board-row {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(var(--cols, 5), 1fr);
   gap: 6px;
 }
 .tile {
