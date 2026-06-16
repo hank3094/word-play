@@ -139,7 +139,7 @@ const Activity = (() => {
   // --- rendering ----------------------------------------------------------
 
   function render() {
-    let visible = events;
+    let visible = events.filter((e) => e.kind !== "player_joined");
     if (filterToGame && currentGame) {
       visible = visible.filter((e) => e.gameId === currentGame);
     }

@@ -738,10 +738,6 @@ body {
   gap: 6px;
   padding: 4px 12px;
   line-height: 1.35;
-  border-bottom: 1px solid var(--line);
-}
-.aev:last-child {
-  border-bottom: none;
 }
 .aev-ts {
   color: var(--fg-dim);
@@ -765,9 +761,10 @@ body {
 .aev-jump {
   flex-shrink: 0;
   margin-left: auto;
-  font-size: 0.85em;
-  padding: 1px 6px;
-  opacity: 0.7;
+  font-size: 0.75em;
+  padding: 0 5px;
+  line-height: 1.4;
+  opacity: 0.6;
 }
 .aev-jump:hover {
   opacity: 1;
@@ -776,7 +773,7 @@ body {
 /* Floating toggle button (narrow screens only). */
 .activity-toggle-btn {
   position: fixed;
-  bottom: 1rem;
+  top: 1rem;
   right: 1rem;
   z-index: 40;
   opacity: 0.85;
