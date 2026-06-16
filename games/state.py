@@ -22,7 +22,7 @@ import re
 import time
 import uuid
 
-from asgiref.sync import sync_to_async
+from channels.db import database_sync_to_async
 
 from .gametypes import get_game_type
 from .redis_client import get_client
@@ -340,15 +340,15 @@ async def lobby_snapshot() -> dict:
 
 # --- activity log ---------------------------------------------------------------------------
 
-# Sync helpers run inside sync_to_async so the ORM can be called from async code.
 
-
+@database_sync_to_async
 def _db_save_activity(event: dict) -> None:
     from .models import ActivityEvent
 
     ActivityEvent.objects.create(ts=event["ts"], event_id=event["id"], data=event)
 
 
+@database_sync_to_async
 def _db_fetch_activity(offset: int, limit: int) -> tuple[list[dict], bool]:
     from .models import ActivityEvent
 
@@ -359,20 +359,22 @@ def _db_fetch_activity(offset: int, limit: int) -> tuple[list[dict], bool]:
     return events, (offset + limit < total)
 
 
-async def push_activity(event: dict) -> None:
-    """Persist an activity event to the database."""
+async def push_activity(event: dict) -> dict:
+    """Stamp, persist, and return the activity event (with ts and id)."""
     stamped = {**event, "ts": time.time(), "id": uuid.uuid4().hex[:12]}
-    await sync_to_async(_db_save_activity)(stamped)
+    await _db_save_activity(stamped)
+    return stamped
 
 
 async def activity_snapshot(offset: int = 0, limit: int = ACTIVITY_PAGE) -> tuple[list[dict], bool]:
     """Return a page of activity in chronological order, plus whether older entries exist."""
-    return await sync_to_async(_db_fetch_activity)(offset, limit)
+    return await _db_fetch_activity(offset, limit)
 
 
 # --- test helper -----------------------------------------------------------------------------
 
 
+@database_sync_to_async
 def _db_clear_activity() -> None:
     from .models import ActivityEvent
 
@@ -385,4 +387,4 @@ async def reset() -> None:
     keys = await r.keys("wp:*")
     if keys:
         await r.delete(*keys)
-    await sync_to_async(_db_clear_activity)()
+    await _db_clear_activity()

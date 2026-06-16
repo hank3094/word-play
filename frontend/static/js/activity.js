@@ -167,7 +167,7 @@ const Activity = (() => {
   function render() {
     let visible = events.filter((e) => e.kind !== "player_joined");
     if (filterToGame && currentGame) {
-      visible = visible.filter((e) => e.gameId === currentGame);
+      visible = visible.filter((e) => !e.gameId || e.gameId === currentGame);
     }
     if (!showRejected) {
       visible = visible.filter((e) => e.kind !== "rejected");

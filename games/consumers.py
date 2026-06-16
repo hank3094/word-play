@@ -290,8 +290,8 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_send(game_group(gid), {"type": "game.update"})
 
     async def _broadcast_activity(self, event: dict) -> None:
-        await S.push_activity(event)
-        await self.channel_layer.group_send(LOBBY, {"type": "activity.push", "event": event})
+        stamped = await S.push_activity(event)
+        await self.channel_layer.group_send(LOBBY, {"type": "activity.push", "event": stamped})
 
     # --- group event handlers (server -> this socket) ---------------------
     async def lobby_update(self, event):
