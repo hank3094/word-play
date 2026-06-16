@@ -730,6 +730,16 @@ body {
 .aev-won {
   background: color-mix(in srgb, var(--hit) 12%, transparent);
 }
+.aev-jump {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 0.85em;
+  padding: 1px 6px;
+  opacity: 0.7;
+}
+.aev-jump:hover {
+  opacity: 1;
+}
 
 /* Floating toggle button (narrow screens only). */
 .activity-toggle-btn {

@@ -158,18 +158,24 @@
       <!-- Sidebar on wide screens; full-screen overlay on narrow (toggled by #activity-toggle). -->
       <aside id="activity-panel" class="activity-panel">
         <div class="activity-head">
-          <h2 class="panel-h">ACTIVITY</h2>
+          <div class="activity-head-row">
+            <h2 class="panel-h">ACTIVITY</h2>
+            <button
+              id="activity-close"
+              class="btn btn-small btn-icon activity-close"
+              aria-label="close activity log"
+            >
+              ✕
+            </button>
+          </div>
           <label class="activity-filter">
             <input type="checkbox" id="show-rejected" />
             show unsuccessful
           </label>
-          <button
-            id="activity-close"
-            class="btn btn-small btn-icon activity-close"
-            aria-label="close activity log"
-          >
-            ✕
-          </button>
+          <label class="activity-filter" id="game-filter-row" hidden>
+            <input type="checkbox" id="this-game-only" checked />
+            this game only
+          </label>
         </div>
         <div id="activity-list" class="activity-list">
           <p class="aev-empty">no moves yet</p>

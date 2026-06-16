@@ -192,6 +192,30 @@ async def test_owner_deletes_game_and_member_is_bounced(fixed_answer):
         await b.disconnect()
 
 
+async def test_owner_in_game_deletes_and_is_bounced_too(fixed_answer):
+    # When the owner deletes a game while they are still inside it (the common
+    # case: clicking DELETE in the game view), they must also receive game_closed
+    # and be returned to the lobby — not left stranded in the game view.
+    a = await _connect("ANA", cid="cid-ana")  # owner, stays in game
+    b = await _connect("BOB", cid="cid-bob")  # member
+    try:
+        await a.send_json_to({"type": "create_game", "gameType": "wordle"})
+        gid = (await _recv_until(a, "game"))["snapshot"]["id"]
+        await b.send_json_to({"type": "open_game", "gameId": gid})
+        await _recv_until(b, "game")
+
+        # ANA is still in the game (current_game == gid on the server side).
+        # Deleting it should bounce both ANA and BOB.
+        await a.send_json_to({"type": "delete_game", "gameId": gid})
+        closed_a = await _recv_until(a, "game_closed")
+        closed_b = await _recv_until(b, "game_closed")
+        assert closed_a["gameId"] == gid
+        assert closed_b["gameId"] == gid
+    finally:
+        await a.disconnect()
+        await b.disconnect()
+
+
 async def test_same_client_id_is_one_player_and_survives_one_drop():
     # Two connections sharing a stable client id (a refresh overlap / second tab) are one player;
     # closing one keeps the player present.

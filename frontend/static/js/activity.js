@@ -3,15 +3,23 @@
 // full-screen overlay opened with the floating LOG button.
 const Activity = (() => {
   let events = [];
-  let showRejected = false;
+  let showRejected = false; // "show unsuccessful" checkbox
+  let filterToGame = false; // "this game only" checkbox
+  let currentGame = null; // set to a gameId while the player is inside a game
+  let onOpenGame = () => {};
   let els = {};
 
-  function init(refs) {
+  function init(refs, handlers) {
     els = refs;
+    onOpenGame = (handlers && handlers.onOpenGame) || (() => {});
 
-    // Filter checkbox: unchecked = hide rejected (default), checked = show all.
     els.filter.addEventListener("change", () => {
       showRejected = els.filter.checked;
+      render();
+    });
+
+    els.gameFilter.addEventListener("change", () => {
+      filterToGame = els.gameFilter.checked;
       render();
     });
 
@@ -22,6 +30,24 @@ const Activity = (() => {
     els.close.addEventListener("click", () =>
       els.panel.classList.remove("is-open"),
     );
+
+    // Jump-to-game buttons (event delegation so they work on dynamically-rendered rows).
+    els.list.addEventListener("click", (e) => {
+      const btn = e.target.closest(".aev-jump");
+      if (btn) {
+        onOpenGame(btn.dataset.gid);
+        els.panel.classList.remove("is-open"); // close mobile overlay after jumping
+      }
+    });
+  }
+
+  // Called when entering / leaving a game. Sets "this game only" on by default when entering.
+  function setCurrentGame(gid) {
+    currentGame = gid;
+    filterToGame = !!gid; // default: filter when entering a game
+    els.gameFilter.checked = filterToGame;
+    els.gameFilterRow.hidden = !gid; // hide the checkbox when in the lobby
+    render();
   }
 
   // Replace the full event list (called on welcome with the server's stored history).
@@ -37,9 +63,13 @@ const Activity = (() => {
   }
 
   function render() {
-    const visible = showRejected
-      ? events
-      : events.filter((e) => e.kind !== "rejected");
+    let visible = events;
+    if (filterToGame && currentGame) {
+      visible = visible.filter((e) => e.gameId === currentGame);
+    }
+    if (!showRejected) {
+      visible = visible.filter((e) => e.kind !== "rejected");
+    }
     if (!visible.length) {
       els.list.innerHTML = '<p class="aev-empty">no moves yet</p>';
       return;
@@ -83,10 +113,21 @@ const Activity = (() => {
         : ev.kind === "game_won"
           ? " aev-won"
           : "";
+
+    // Show a jump button for entries that belong to a different game than the current one
+    // (or any game when the player is in the lobby). No button for the game you're already in.
+    const canJump = ev.gameId && ev.gameId !== currentGame;
+    const jumpBtn = canJump
+      ? `<button class="btn btn-small aev-jump" data-gid="${esc(
+          ev.gameId,
+        )}" title="open this game">→</button>`
+      : "";
+
     return (
       `<div class="aev${extra}">` +
       `<span class="aev-ts">${esc(ts)}</span>` +
       `<span class="aev-body">${body}</span>` +
+      jumpBtn +
       `</div>`
     );
   }
@@ -129,5 +170,5 @@ const Activity = (() => {
     return /^#[0-9a-f]{6}$/i.test(c || "") ? c : "";
   }
 
-  return { init, load, push };
+  return { init, load, push, setCurrentGame };
 })();

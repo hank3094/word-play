@@ -232,6 +232,7 @@
       if (e.target.closest('[data-nav="leave"]')) {
         Net.send("leave_game");
         Wordle.reset();
+        Activity.setCurrentGame(null);
         show("lobby");
       } else if (e.target.closest('[data-nav="delete"]')) {
         if (confirm("Delete this game for everyone?")) {
@@ -243,13 +244,20 @@
 
   // ---- activity panel ----
   function wireActivity() {
-    Activity.init({
-      panel: document.getElementById("activity-panel"),
-      list: document.getElementById("activity-list"),
-      filter: document.getElementById("show-rejected"),
-      toggle: document.getElementById("activity-toggle"),
-      close: document.getElementById("activity-close"),
-    });
+    Activity.init(
+      {
+        panel: document.getElementById("activity-panel"),
+        list: document.getElementById("activity-list"),
+        filter: document.getElementById("show-rejected"),
+        gameFilter: document.getElementById("this-game-only"),
+        gameFilterRow: document.getElementById("game-filter-row"),
+        toggle: document.getElementById("activity-toggle"),
+        close: document.getElementById("activity-close"),
+      },
+      {
+        onOpenGame: (gid) => Net.send("open_game", { gameId: gid }),
+      },
+    );
   }
 
   // ---- websocket message handlers ----
@@ -283,6 +291,7 @@
       if (!views["wordle-game"].classList.contains("is-active"))
         show("wordle-game");
       Wordle.applySnapshot(snap);
+      Activity.setCurrentGame(snap.id);
       if (snap.status !== "playing") refreshHistory();
     });
 
@@ -295,11 +304,13 @@
     Net.on("rejected", (m) => Wordle.onRejected(m.reason));
     Net.on("left", () => {
       Wordle.reset();
+      Activity.setCurrentGame(null);
       show("lobby");
     });
     // The owner deleted a game we were in — bounce back to the lobby.
     Net.on("game_closed", () => {
       Wordle.reset();
+      Activity.setCurrentGame(null);
       show("lobby");
     });
   }
