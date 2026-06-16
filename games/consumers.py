@@ -107,6 +107,9 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         self.registered = True
         await self.send_json({"type": "welcome", "id": self.pid, "name": self.name})
         await self._broadcast_lobby()
+        events = await S.activity_snapshot()
+        if events:
+            await self.send_json({"type": "activity_log", "events": events})
 
     async def _set_name(self, content):
         self.name = _clean_name(content.get("name"))
@@ -129,11 +132,28 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
             return
         gid = await S.create_game(game_type, self.pid, self.name, options, color=self.color)
         if gid:
+            await self._broadcast_activity(
+                {
+                    "kind": "game_created",
+                    "gameId": gid,
+                    "gameType": game_type,
+                    "name": self.name,
+                    "color": self.color,
+                }
+            )
             await self._enter_game(gid)
 
     async def _open_game(self, content):
         gid = str(content.get("gameId", ""))
-        if await S.join_game(self.pid, gid, self.name, color=self.color):
+        snap = await S.join_game(self.pid, gid, self.name, color=self.color)
+        if snap:
+            # Only log a join event if the player wasn't already a member (avoids noise on
+            # reconnect, where open_game is re-sent to rejoin the server-side group).
+            was_member = self.current_game == gid
+            if not was_member:
+                await self._broadcast_activity(
+                    {"kind": "player_joined", "gameId": gid, "name": self.name, "color": self.color}
+                )
             await self._enter_game(gid)
 
     async def _enter_game(self, gid):
@@ -192,9 +212,52 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
             reason = next(
                 (e.get("reason") for e in res["events"] if e.get("kind") == "invalid"), "invalid"
             )
+            word = str(data.get("word", "")).lower().strip()
+            await self._broadcast_activity(
+                {
+                    "kind": "rejected",
+                    "gameId": gid,
+                    "name": self.name,
+                    "word": word,
+                    "reason": reason,
+                    "color": self.color,
+                }
+            )
             await self.send_json({"type": "rejected", "reason": reason})
             return
         if res["changed"]:
+            # Build activity events from the game-type events returned by apply_action.
+            evs = res["events"]
+            guess_ev = next((e for e in evs if e.get("kind") == "guess"), None)
+            win_ev = next((e for e in evs if e.get("kind") == "win"), None)
+            lose_ev = next((e for e in evs if e.get("kind") == "lose"), None)
+            if guess_ev:
+                if win_ev:
+                    await self._broadcast_activity(
+                        {
+                            "kind": "game_won",
+                            "gameId": gid,
+                            "name": self.name,
+                            "word": guess_ev["word"],
+                            "marks": guess_ev["marks"],
+                            "color": self.color,
+                        }
+                    )
+                else:
+                    await self._broadcast_activity(
+                        {
+                            "kind": "guess",
+                            "gameId": gid,
+                            "name": self.name,
+                            "word": guess_ev["word"],
+                            "marks": guess_ev["marks"],
+                            "color": self.color,
+                        }
+                    )
+            if lose_ev:
+                await self._broadcast_activity(
+                    {"kind": "game_lost", "gameId": gid, "answer": lose_ev["answer"]}
+                )
             await self._broadcast_game(gid)
             if res["finished"]:
                 await _save_finished(res["result"], res["snapshot"]["gameType"])
@@ -206,6 +269,10 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
 
     async def _broadcast_game(self, gid):
         await self.channel_layer.group_send(game_group(gid), {"type": "game.update"})
+
+    async def _broadcast_activity(self, event: dict) -> None:
+        await S.push_activity(event)
+        await self.channel_layer.group_send(LOBBY, {"type": "activity.push", "event": event})
 
     # --- group event handlers (server -> this socket) ---------------------
     async def lobby_update(self, event):
@@ -223,6 +290,9 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         if ev.get("pid") == self.pid:  # don't echo a player's own typing back to them
             return
         await self.send_json({"type": "feed", "event": ev})
+
+    async def activity_push(self, event):
+        await self.send_json({"type": "activity_event", "event": event["event"]})
 
     async def game_closed(self, event):
         gid = event["gid"]

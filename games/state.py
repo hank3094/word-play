@@ -27,9 +27,11 @@ from .redis_client import get_client
 
 PLAYERS_SET = "wp:players"
 GAMES_SET = "wp:games"
+ACTIVITY_KEY = "wp:activity"
 ALIVE_TTL = 45  # seconds; refreshed on every client message / ping
 GAME_TTL = 6 * 3600  # abandoned games self-expire after a few hours
 FEED_MAX = 30  # keep the last N durable feed events per game
+ACTIVITY_MAX = 150  # global activity log entries kept in Redis
 
 
 def _nkey(pid: str) -> str:
@@ -333,6 +335,24 @@ async def list_games() -> list[dict]:
 
 async def lobby_snapshot() -> dict:
     return {"players": await players_snapshot(), "games": await list_games()}
+
+
+# --- activity log ---------------------------------------------------------------------------
+
+
+async def push_activity(event: dict) -> None:
+    """Prepend an event to the global activity log (newest-first in Redis)."""
+    r = get_client()
+    stamped = {**event, "ts": time.time()}
+    await r.lpush(ACTIVITY_KEY, json.dumps(stamped))
+    await r.ltrim(ACTIVITY_KEY, 0, ACTIVITY_MAX - 1)
+
+
+async def activity_snapshot() -> list[dict]:
+    """Return recent activity in chronological (oldest-first) order."""
+    r = get_client()
+    raw = await r.lrange(ACTIVITY_KEY, 0, -1)
+    return [json.loads(e) for e in reversed(raw)]
 
 
 # --- test helper -----------------------------------------------------------------------------

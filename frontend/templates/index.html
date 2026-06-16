@@ -153,6 +153,31 @@
           </div>
         </div>
       </main>
+
+      <!-- ===== ACTIVITY LOG ===== -->
+      <!-- Sidebar on wide screens; full-screen overlay on narrow (toggled by #activity-toggle). -->
+      <aside id="activity-panel" class="activity-panel">
+        <div class="activity-head">
+          <h2 class="panel-h">ACTIVITY</h2>
+          <label class="activity-filter">
+            <input type="checkbox" id="show-rejected" />
+            show unsuccessful
+          </label>
+          <button
+            id="activity-close"
+            class="btn btn-small btn-icon activity-close"
+            aria-label="close activity log"
+          >
+            ✕
+          </button>
+        </div>
+        <div id="activity-list" class="activity-list">
+          <p class="aev-empty">no moves yet</p>
+        </div>
+      </aside>
+
+      <!-- Floating toggle button — visible on narrow screens only. -->
+      <button id="activity-toggle" class="btn btn-small activity-toggle-btn">LOG</button>
     </div>
 
     <script src="{% static 'js/api.js' %}"></script>
@@ -161,6 +186,7 @@
     <script src="{% static 'js/board.js' %}"></script>
     <script src="{% static 'js/wordle.js' %}"></script>
     <script src="{% static 'js/lobby.js' %}"></script>
+    <script src="{% static 'js/activity.js' %}"></script>
     <script src="{% static 'js/app.js' %}"></script>
   </body>
 </html>

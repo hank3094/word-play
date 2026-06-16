@@ -241,6 +241,17 @@
     });
   }
 
+  // ---- activity panel ----
+  function wireActivity() {
+    Activity.init({
+      panel: document.getElementById("activity-panel"),
+      list: document.getElementById("activity-list"),
+      filter: document.getElementById("show-rejected"),
+      toggle: document.getElementById("activity-toggle"),
+      close: document.getElementById("activity-close"),
+    });
+  }
+
   // ---- websocket message handlers ----
   function wireNet() {
     Net.setStatusCb((s) => {
@@ -278,6 +289,8 @@
     // A custom word the server wouldn't accept (e.g. not in the word list).
     Net.on("create_error", (m) => showModalError(m.error));
 
+    Net.on("activity_log", (m) => Activity.load(m.events));
+    Net.on("activity_event", (m) => Activity.push(m.event));
     Net.on("feed", (m) => Wordle.onFeed(m.event));
     Net.on("rejected", (m) => Wordle.onRejected(m.reason));
     Net.on("left", () => {
@@ -313,6 +326,7 @@
   wireNameEntry();
   wireLobby();
   wireGame();
+  wireActivity();
   wireNet();
   wireKeyboard();
 
