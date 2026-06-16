@@ -207,6 +207,12 @@ const Activity = (() => {
       case "game_created":
         body = `${dot}<b>${n}</b> started a Wordle`;
         break;
+      case "player_updated": {
+        const oldN = ev.oldName ? esc(ev.oldName) : n;
+        const oldDot = colorDot(ev.oldColor || ev.color);
+        body = `${oldDot}<b>${oldN}</b> → ${dot}<b>${n}</b>`;
+        break;
+      }
       case "guess":
         body = `${dot}<b>${n}</b>: ${w} ${marks(ev.marks)}`;
         break;

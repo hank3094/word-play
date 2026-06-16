@@ -114,9 +114,24 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def _set_name(self, content):
+        old_name = self.name
+        old_color = self.color
         self.name = _clean_name(content.get("name"))
         if "color" in content:
             self.color = _clean_color(content.get("color"))
+        name_changed = self.name != old_name
+        color_changed = self.color != old_color
+        if name_changed or color_changed:
+            ev: dict = {
+                "kind": "player_updated",
+                "name": self.name,
+                "color": self.color,
+            }
+            if name_changed:
+                ev["oldName"] = old_name
+            if color_changed:
+                ev["oldColor"] = old_color
+            await self._broadcast_activity(ev)
         affected = await S.set_name(self.pid, self.name, self.color)
         await self._broadcast_lobby()
         for gid in affected:
