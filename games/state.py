@@ -31,7 +31,8 @@ ACTIVITY_KEY = "wp:activity"
 ALIVE_TTL = 45  # seconds; refreshed on every client message / ping
 GAME_TTL = 6 * 3600  # abandoned games self-expire after a few hours
 FEED_MAX = 30  # keep the last N durable feed events per game
-ACTIVITY_MAX = 150  # global activity log entries kept in Redis
+ACTIVITY_MAX = 300  # global activity log entries kept in Redis
+ACTIVITY_PAGE = 50  # events sent per request
 
 
 def _nkey(pid: str) -> str:
@@ -343,16 +344,18 @@ async def lobby_snapshot() -> dict:
 async def push_activity(event: dict) -> None:
     """Prepend an event to the global activity log (newest-first in Redis)."""
     r = get_client()
-    stamped = {**event, "ts": time.time()}
+    stamped = {**event, "ts": time.time(), "id": uuid.uuid4().hex[:12]}
     await r.lpush(ACTIVITY_KEY, json.dumps(stamped))
     await r.ltrim(ACTIVITY_KEY, 0, ACTIVITY_MAX - 1)
 
 
-async def activity_snapshot() -> list[dict]:
-    """Return recent activity in chronological (oldest-first) order."""
+async def activity_snapshot(offset: int = 0, limit: int = ACTIVITY_PAGE) -> tuple[list[dict], bool]:
+    """Return a page of activity in chronological order, plus whether older entries exist."""
     r = get_client()
-    raw = await r.lrange(ACTIVITY_KEY, 0, -1)
-    return [json.loads(e) for e in reversed(raw)]
+    raw = await r.lrange(ACTIVITY_KEY, offset, offset + limit - 1)
+    total = await r.llen(ACTIVITY_KEY)
+    events = [json.loads(e) for e in reversed(raw)]
+    return events, (offset + limit < total)
 
 
 # --- test helper -----------------------------------------------------------------------------

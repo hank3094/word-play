@@ -148,7 +148,7 @@ body {
 .btn-small {
   font-size: 15px;
   padding: 6px 12px;
-  min-height: 36px;
+  min-height: 18px;
 }
 .btn-back {
   border-color: var(--line);
@@ -732,6 +732,14 @@ body {
   padding: 16px;
   margin: 0;
 }
+.aev-load-more {
+  color: var(--fg-dim);
+  font-size: 0.75em;
+  text-align: center;
+  padding: 6px;
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+}
 .aev {
   display: flex;
   align-items: baseline;
@@ -761,9 +769,9 @@ body {
 .aev-jump {
   flex-shrink: 0;
   margin-left: auto;
-  font-size: 0.75em;
+  font-size: 1em;
   padding: 0 5px;
-  line-height: 1.4;
+  line-height: 1;
   opacity: 0.6;
 }
 .aev-jump:hover {

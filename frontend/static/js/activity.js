@@ -2,9 +2,9 @@
 // panel. On wide screens (≥960 px) the panel is a permanent sidebar; on narrow screens it is a
 // full-screen overlay opened with the floating LOG button.
 const Activity = (() => {
-  const WIDE = 960; // px, matches CSS breakpoint
-  const PW_KEY = "wp-panel-w"; // localStorage: saved panel width
-  const PH_KEY = "wp-panel-hidden"; // localStorage: collapsed state
+  const WIDE = 960;
+  const PW_KEY = "wp-panel-w";
+  const PH_KEY = "wp-panel-hidden";
   const MIN_W = 160;
   const MAX_W = 520;
   const DEFAULT_W = 270;
@@ -14,27 +14,32 @@ const Activity = (() => {
   let filterToGame = false;
   let currentGame = null;
   let onOpenGame = () => {};
+  let onFetchActivity = () => {};
   let els = {};
-  let panelW = DEFAULT_W; // current width (wide sidebar only)
+  let panelW = DEFAULT_W;
 
-  // --- panel width / collapse helpers -------------------------------------
+  // Pagination state
+  let serverOffset = 0; // next offset to request from the server
+  let hasMore = false; // server has older entries beyond what we've loaded
+  let fetching = false; // a fetch_activity request is in-flight
+  let prependNext = false; // next render should preserve scroll position (not jump to bottom)
+  let seenIds = new Set(); // dedup live-push vs. historical overlap
+
+  // --- panel width / collapse helpers ---
 
   function _applyWidth(w) {
     document.documentElement.style.setProperty("--activity-w", w + "px");
   }
-
   function _collapse() {
     _applyWidth(0);
     els.panel.classList.add("is-collapsed");
     localStorage.setItem(PH_KEY, "1");
   }
-
   function _expand() {
     _applyWidth(panelW);
     els.panel.classList.remove("is-collapsed");
     localStorage.removeItem(PH_KEY);
   }
-
   function _restoreState() {
     const saved = parseInt(localStorage.getItem(PW_KEY) || "", 10);
     panelW = saved >= MIN_W && saved <= MAX_W ? saved : DEFAULT_W;
@@ -45,15 +50,15 @@ const Activity = (() => {
     }
   }
 
-  // --- init ---------------------------------------------------------------
+  // --- init ---
 
   function init(refs, handlers) {
     els = refs;
     onOpenGame = (handlers && handlers.onOpenGame) || (() => {});
+    onFetchActivity = (handlers && handlers.onFetchActivity) || (() => {});
 
     _restoreState();
 
-    // Filters
     els.filter.addEventListener("change", () => {
       showRejected = els.filter.checked;
       render();
@@ -63,7 +68,6 @@ const Activity = (() => {
       render();
     });
 
-    // Toggle (LOG button): open overlay on narrow; expand sidebar on wide.
     els.toggle.addEventListener("click", () => {
       if (window.innerWidth >= WIDE) {
         _expand();
@@ -71,8 +75,6 @@ const Activity = (() => {
         els.panel.classList.add("is-open");
       }
     });
-
-    // Close button: collapse sidebar on wide; close overlay on narrow.
     els.close.addEventListener("click", () => {
       if (window.innerWidth >= WIDE) {
         _collapse();
@@ -81,7 +83,6 @@ const Activity = (() => {
       }
     });
 
-    // Jump-to-game buttons (event delegation).
     els.list.addEventListener("click", (e) => {
       const btn = e.target.closest(".aev-jump");
       if (btn) {
@@ -90,7 +91,15 @@ const Activity = (() => {
       }
     });
 
-    // Resize drag handle (wide screens only).
+    // Scroll-to-top triggers loading older entries.
+    els.list.addEventListener("scroll", () => {
+      if (els.list.scrollTop < 8 && hasMore && !fetching) {
+        fetching = true;
+        prependNext = true;
+        onFetchActivity(serverOffset);
+      }
+    });
+
     if (els.resizer) {
       els.resizer.addEventListener("mousedown", (e) => {
         if (window.innerWidth < WIDE) return;
@@ -116,7 +125,7 @@ const Activity = (() => {
     }
   }
 
-  // --- public API ---------------------------------------------------------
+  // --- public API ---
 
   function setCurrentGame(gid) {
     currentGame = gid;
@@ -126,17 +135,34 @@ const Activity = (() => {
     render();
   }
 
-  function load(evts) {
-    events = evts || [];
+  // Called with server history. offset=0 → initial load (replace); offset>0 → prepend older batch.
+  function load(evts, offset, more) {
+    fetching = false;
+    hasMore = !!more;
+    const incoming = (evts || []).filter((e) => !seenIds.has(e.id));
+    incoming.forEach((e) => e.id && seenIds.add(e.id));
+
+    if (offset === 0) {
+      events = incoming;
+      serverOffset = incoming.length;
+      prependNext = false;
+    } else {
+      events = incoming.concat(events); // older events go before current ones
+      serverOffset = offset + incoming.length;
+      // prependNext already set to true when we requested this batch
+    }
     render();
   }
 
+  // Real-time single event push.
   function push(ev) {
+    if (ev.id && seenIds.has(ev.id)) return;
+    if (ev.id) seenIds.add(ev.id);
     events.push(ev);
     render();
   }
 
-  // --- rendering ----------------------------------------------------------
+  // --- rendering ---
 
   function render() {
     let visible = events.filter((e) => e.kind !== "player_joined");
@@ -146,12 +172,28 @@ const Activity = (() => {
     if (!showRejected) {
       visible = visible.filter((e) => e.kind !== "rejected");
     }
+
+    const topRow = hasMore
+      ? '<p class="aev-load-more">' +
+        (fetching ? "loading…" : "↑ scroll for older entries") +
+        "</p>"
+      : "";
+
     if (!visible.length) {
-      els.list.innerHTML = '<p class="aev-empty">no moves yet</p>';
+      els.list.innerHTML = topRow + '<p class="aev-empty">no moves yet</p>';
       return;
     }
-    els.list.innerHTML = visible.map(fmtEvent).join("");
-    els.list.scrollTop = els.list.scrollHeight;
+
+    if (prependNext) {
+      // Preserve scroll position after prepending so viewport doesn't jump.
+      const prevH = els.list.scrollHeight;
+      els.list.innerHTML = topRow + visible.map(fmtEvent).join("");
+      els.list.scrollTop = els.list.scrollHeight - prevH;
+      prependNext = false;
+    } else {
+      els.list.innerHTML = topRow + visible.map(fmtEvent).join("");
+      els.list.scrollTop = els.list.scrollHeight;
+    }
   }
 
   function fmtEvent(ev) {

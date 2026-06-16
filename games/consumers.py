@@ -91,6 +91,7 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
             "leave_game": self._leave_game,
             "delete_game": self._delete_game,
             "game_action": self._game_action,
+            "fetch_activity": self._fetch_activity,
         }.get(content.get("type"))
         if handler:
             await handler(content)
@@ -107,9 +108,10 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         self.registered = True
         await self.send_json({"type": "welcome", "id": self.pid, "name": self.name})
         await self._broadcast_lobby()
-        events = await S.activity_snapshot()
-        if events:
-            await self.send_json({"type": "activity_log", "events": events})
+        events, has_more = await S.activity_snapshot()
+        await self.send_json(
+            {"type": "activity_log", "events": events, "offset": 0, "hasMore": has_more}
+        )
 
     async def _set_name(self, content):
         self.name = _clean_name(content.get("name"))
@@ -122,6 +124,13 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
 
     async def _ping(self, content):
         pass  # touch() already refreshed liveness
+
+    async def _fetch_activity(self, content):
+        offset = max(0, int(content.get("offset") or 0))
+        events, has_more = await S.activity_snapshot(offset=offset)
+        await self.send_json(
+            {"type": "activity_log", "events": events, "offset": offset, "hasMore": has_more}
+        )
 
     async def _create_game(self, content):
         game_type = str(content.get("gameType", "wordle"))
