@@ -98,6 +98,38 @@ async def test_create_open_typing_and_guess_broadcast(fixed_answer):
         await b.disconnect()
 
 
+async def test_create_with_custom_word():
+    a = await _connect("ANA")
+    try:
+        await a.send_json_to(
+            {"type": "create_game", "gameType": "wordle", "options": {"word": "ghost"}}
+        )
+        game = await _recv_until(a, "game")
+        gid = game["snapshot"]["id"]
+        # the chosen word is the answer: guessing it wins
+        await a.send_json_to(
+            {"type": "game_action", "gameId": gid, "action": "guess", "data": {"word": "ghost"}}
+        )
+        won = await _recv_until(a, "game")
+        assert won["snapshot"]["status"] == "won"
+        assert won["snapshot"]["board"]["answer"] == "ghost"
+    finally:
+        await a.disconnect()
+
+
+async def test_create_with_invalid_word_errors_and_makes_no_game():
+    a = await _connect("ANA")
+    try:
+        await a.send_json_to(
+            {"type": "create_game", "gameType": "wordle", "options": {"word": "zzzzz"}}
+        )
+        err = await _recv_until(a, "create_error")
+        assert "word list" in err["error"]
+        assert await state.list_games() == []  # nothing was created
+    finally:
+        await a.disconnect()
+
+
 async def test_winning_guess_writes_finished_game(fixed_answer):
     a = await _connect("ANA")
     try:

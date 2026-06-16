@@ -67,6 +67,19 @@ async def test_join_and_leave_game(fixed_answer):
     assert {p["name"] for p in snap2["players"]} == {"ANA"}
 
 
+async def test_create_game_with_custom_word():
+    gid = await state.create_game("wordle", "p1", "ANA", {"word": "crane"})
+    res = await state.apply_action(gid, "p1", "ANA", "guess", {"word": "crane"})
+    assert res["finished"] and res["result"]["won"] and res["result"]["answer"] == "crane"
+
+
+def test_validate_new_game():
+    assert state.validate_new_game("wordle", {}) is None
+    assert state.validate_new_game("wordle", {"word": "crane"}) is None
+    assert state.validate_new_game("wordle", {"word": "zzzzz"})  # error string
+    assert state.validate_new_game("chess", {}) == "Unknown game type."
+
+
 async def test_create_records_owner(fixed_answer):
     gid = await state.create_game("wordle", "p1", "ANA")
     games = await state.list_games()

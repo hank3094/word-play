@@ -63,8 +63,29 @@ def score_guess(guess: str, answer: str) -> list[str]:
     return marks
 
 
-def create_state() -> dict:
-    return {"answer": pick_word(), "rows": [], "status": PLAYING}
+def validate_options(options: dict) -> str | None:
+    """Check the create-game options. Returns an error message, or None if they're fine.
+
+    ``options["word"]`` (optional) lets the creator set the secret word; it must be a real,
+    guessable word so the game is solvable. An empty/absent word means "pick a random one".
+    """
+    word = str((options or {}).get("word") or "").strip().lower()
+    if not word:
+        return None
+    if len(word) != WORD_LENGTH or not word.isalpha():
+        return f"The word must be {WORD_LENGTH} letters."
+    if not is_allowed(word):
+        return "That isn't in our word list."
+    return None
+
+
+def create_state(options: dict | None = None) -> dict:
+    word = str((options or {}).get("word") or "").strip().lower()
+    # Use the creator's word only if it's valid; otherwise fall back to a random one.
+    answer = (
+        word if (len(word) == WORD_LENGTH and word.isalpha() and is_allowed(word)) else pick_word()
+    )
+    return {"answer": answer, "rows": [], "status": PLAYING}
 
 
 def is_finished(state: dict) -> bool:

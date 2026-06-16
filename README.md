@@ -20,7 +20,11 @@ Compose**; tested with **pytest** and **Playwright**.
 - **Cooperative Wordle** — one shared 6×5 board per game. Any player in the game can type into the
   current row (on-screen keyboard or a physical one) and press ENTER to submit. Everyone sees the
   same board, the colour feedback (🟩 right spot / 🟨 wrong spot / ⬜ not in word), each other's
-  **live typing**, and a feed of guesses. Solve it together in six tries.
+  **live typing**, and a feed of guesses. Solve it together in six tries. Guesses that aren't in
+  the word list are explained in the feed rather than silently ignored.
+- **Random or chosen word** — when you start a Wordle you can let the server pick a random word, or
+  **choose the secret word yourself** for your friends to solve. The word is entered password-style
+  (masked by default, with a reveal toggle) and must be a real five-letter word.
 - **Multiple games at once** — create as many games as you like; they all appear in the lobby for
   anyone to open and join.
 

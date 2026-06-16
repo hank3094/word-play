@@ -128,8 +128,24 @@ async def _save(blob: dict) -> None:
     await get_client().set(_gkey(blob["id"]), json.dumps(blob), ex=GAME_TTL)
 
 
+def validate_new_game(game_type: str, options: dict | None = None) -> str | None:
+    """Pre-flight check before creating a game. Returns an error message, or None if it's fine.
+
+    Delegates option validation (e.g. a custom Wordle word) to the game type. Pure/sync so the
+    consumer can give the creator immediate feedback without committing anything.
+    """
+    mod = get_game_type(game_type)
+    if mod is None:
+        return "Unknown game type."
+    validator = getattr(mod, "validate_options", None)
+    return validator(options or {}) if validator else None
+
+
 async def create_game(
-    game_type: str, pid: str | None = None, name: str | None = None
+    game_type: str,
+    pid: str | None = None,
+    name: str | None = None,
+    options: dict | None = None,
 ) -> str | None:
     mod = get_game_type(game_type)
     if mod is None:
@@ -144,7 +160,7 @@ async def create_game(
         "status": "playing",
         "created": time.time(),
         "players": players,
-        "state": mod.create_state(),
+        "state": mod.create_state(options),
         "feed": [],
     }
     await r.sadd(GAMES_SET, gid)

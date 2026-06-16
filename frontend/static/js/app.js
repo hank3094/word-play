@@ -70,9 +70,8 @@
 
     document
       .getElementById("new-game")
-      .addEventListener("click", () =>
-        Net.send("create_game", { gameType: "wordle" }),
-      );
+      .addEventListener("click", openNewGameModal);
+    wireNewGameModal();
 
     document.getElementById("edit-name").addEventListener("click", () => {
       const next = prompt("Your name:", storedName());
@@ -80,6 +79,91 @@
       const name = setName(next);
       document.getElementById("you-name").textContent = name;
       Net.send("set_name", { name });
+    });
+  }
+
+  // ---- new game modal ----
+  function modalEls() {
+    return {
+      modal: document.getElementById("new-game-modal"),
+      form: document.getElementById("new-game-form"),
+      customRow: document.getElementById("custom-word-row"),
+      wordInput: document.getElementById("custom-word"),
+      toggle: document.getElementById("toggle-word"),
+      error: document.getElementById("new-game-error"),
+    };
+  }
+
+  function openNewGameModal() {
+    const el = modalEls();
+    el.form.reset();
+    el.customRow.hidden = true;
+    el.wordInput.value = "";
+    el.wordInput.type = "password"; // masked by default
+    el.toggle.setAttribute("aria-pressed", "false");
+    el.error.hidden = true;
+    el.modal.hidden = false;
+  }
+
+  function closeNewGameModal() {
+    const el = modalEls();
+    el.wordInput.value = ""; // don't leave the secret word lying around
+    el.modal.hidden = true;
+  }
+
+  function showModalError(msg) {
+    const el = modalEls();
+    el.error.textContent = msg;
+    el.error.hidden = false;
+  }
+
+  function wireNewGameModal() {
+    const el = modalEls();
+
+    // Show/hide the custom-word row with the radio choice.
+    el.form.querySelectorAll('input[name="word-mode"]').forEach((radio) => {
+      radio.addEventListener("change", () => {
+        const custom =
+          el.form.querySelector('input[name="word-mode"]:checked').value ===
+          "custom";
+        el.customRow.hidden = !custom;
+        el.error.hidden = true;
+        if (custom) el.wordInput.focus();
+      });
+    });
+
+    // Password-style reveal toggle (masked by default).
+    el.toggle.addEventListener("click", () => {
+      const showing = el.wordInput.type === "text";
+      el.wordInput.type = showing ? "password" : "text";
+      el.toggle.setAttribute("aria-pressed", String(!showing));
+      el.wordInput.focus();
+    });
+
+    el.modal.addEventListener("click", (e) => {
+      // Cancel button, or a click on the dimmed backdrop.
+      if (e.target.closest('[data-modal="cancel"]') || e.target === el.modal) {
+        closeNewGameModal();
+      }
+    });
+
+    el.form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const custom =
+        el.form.querySelector('input[name="word-mode"]:checked').value ===
+        "custom";
+      if (!custom) {
+        Net.send("create_game", { gameType: "wordle" });
+        return;
+      }
+      const word = el.wordInput.value.trim().toLowerCase();
+      if (!/^[a-z]{5}$/.test(word)) {
+        showModalError("The word must be 5 letters.");
+        return;
+      }
+      el.error.hidden = true;
+      Net.send("create_game", { gameType: "wordle", options: { word } });
+      // The modal closes when we enter the game (the `game` message) or shows a server error.
     });
   }
 
@@ -128,6 +212,7 @@
 
     Net.on("game", (m) => {
       const snap = m.snapshot;
+      closeNewGameModal(); // we successfully created/entered a game
       // Entering a game (or already in it): make sure the game view is showing.
       if (Wordle.currentGame() !== snap.id) Wordle.open(snap.id);
       if (!views["wordle-game"].classList.contains("is-active"))
@@ -136,8 +221,11 @@
       if (snap.status !== "playing") refreshHistory();
     });
 
+    // A custom word the server wouldn't accept (e.g. not in the word list).
+    Net.on("create_error", (m) => showModalError(m.error));
+
     Net.on("feed", (m) => Wordle.onFeed(m.event));
-    Net.on("rejected", () => Wordle.onRejected());
+    Net.on("rejected", (m) => Wordle.onRejected(m.reason));
     Net.on("left", () => {
       Wordle.reset();
       show("lobby");

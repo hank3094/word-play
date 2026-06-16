@@ -27,6 +27,7 @@ def test_valid_guess_works_after_a_rejected_one(page: Page, server_url: str):
     expect(page.locator("#lobby")).to_be_visible()
 
     page.click("#new-game")
+    page.click("#new-game-form button[type=submit]")  # random word
     expect(page.locator("#wordle-game")).to_be_visible()
 
     _guess(page, "qwxzz")  # not a word -> rejected, no row added

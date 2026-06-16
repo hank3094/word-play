@@ -29,8 +29,9 @@ def test_cooperative_wordle(browser: Browser, server_url: str):
         expect(a.locator("#players-list")).to_contain_text("BOB")
         expect(b.locator("#players-list")).to_contain_text("ANA")
 
-        # ANA creates a Wordle and is dropped into the shared board.
+        # ANA creates a Wordle (random word) and is dropped into the shared board.
         a.click("#new-game")
+        a.click("#new-game-form button[type=submit]")
         expect(a.locator("#wordle-game")).to_be_visible()
         expect(a.locator("#board .board-row")).to_have_count(6)
 

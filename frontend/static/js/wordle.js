@@ -9,6 +9,7 @@ const Wordle = (() => {
   let snap = null;
   let buffer = "";
   let pending = null; // a guess that's been submitted and is awaiting the server's response
+  let rejectMsg = null; // why the last guess was rejected, shown until the next keystroke
   let prevRows = 0;
   let typingPeer = null; // {name, text} from another player, shown when my buffer is empty
   let lastTypingSent = 0;
@@ -26,6 +27,7 @@ const Wordle = (() => {
     gid = gameId;
     buffer = "";
     pending = null;
+    rejectMsg = null;
     prevRows = 0;
     typingPeer = null;
   }
@@ -35,6 +37,7 @@ const Wordle = (() => {
     snap = null;
     buffer = "";
     pending = null;
+    rejectMsg = null;
     prevRows = 0;
     typingPeer = null;
   }
@@ -53,6 +56,7 @@ const Wordle = (() => {
       // a guess landed (mine or someone else's) — the active row advanced
       buffer = "";
       pending = null;
+      rejectMsg = null;
       typingPeer = null;
       prevRows = s.board.rows.length;
     }
@@ -88,6 +92,7 @@ const Wordle = (() => {
       return;
     }
     pending = null; // composing a fresh guess
+    rejectMsg = null; // clear any "not a word" note once they start retyping
     if (key === "back") {
       buffer = buffer.slice(0, -1);
     } else if (/^[a-z]$/.test(key) && buffer.length < len) {
@@ -96,13 +101,24 @@ const Wordle = (() => {
       return;
     }
     renderBoard();
+    renderFeed();
     sendTyping();
   }
 
-  function onRejected() {
-    // The submitted word wasn't accepted (e.g. not a known word): flash it, then drop it so the
-    // user can type a fresh guess.
+  function rejectText(reason) {
+    const w = (pending || "").toUpperCase();
+    if (reason === "length") return "guesses must be 5 letters";
+    if (reason === "finished") return "this game is already over";
+    // "unknown" or anything else: the word isn't in our list
+    return w ? `“${w}” isn’t in the word list` : "that isn’t in the word list";
+  }
+
+  function onRejected(reason) {
+    // The submitted word wasn't accepted: flash it, explain why, then drop it so the user can type
+    // a fresh guess. The explanation stays until they start retyping.
+    rejectMsg = rejectText(reason);
     Board.flashInvalid();
+    renderFeed();
     setTimeout(() => {
       pending = null;
       renderBoard();
@@ -166,6 +182,7 @@ const Wordle = (() => {
     const durable = snap.feed.filter((e) => e.kind !== "typing");
     const last = durable[durable.length - 1];
     if (last) lines.push(`<div>${fmtFeed(last)}</div>`);
+    if (rejectMsg) lines.push(`<div class="reject">${rejectMsg}</div>`);
     if (typingPeer && !buffer.length && isPlaying()) {
       lines.push(`<div class="typing">${typingPeer.name} is typing…</div>`);
     }

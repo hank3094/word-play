@@ -6,10 +6,11 @@ the live feed, and other players' typing.
 
 Message protocol (JSON, ``{"type": ...}``):
 
-  client -> server: hello{name}, set_name{name}, ping, create_game{gameType}, open_game{gameId},
-                    leave_game, delete_game{gameId} (owner only), game_action{gameId, action, data}
+  client -> server: hello{name}, set_name{name}, ping, create_game{gameType, options?},
+                    open_game{gameId}, leave_game, delete_game{gameId} (owner only),
+                    game_action{gameId, action, data}
   server -> client: welcome{id,name}, lobby{players,games}, game{snapshot}, feed{event},
-                    rejected{reason}, left, game_closed{gameId}
+                    rejected{reason}, create_error{error}, left, game_closed{gameId}
 
 Broadcasts use the two-tier pattern: mutate Redis, then send a lightweight signal to the group;
 each socket's handler rebuilds and sends its own snapshot. Live typing is the one exception — it is
@@ -110,7 +111,13 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         pass  # touch() already refreshed liveness
 
     async def _create_game(self, content):
-        gid = await S.create_game(str(content.get("gameType", "wordle")), self.pid, self.name)
+        game_type = str(content.get("gameType", "wordle"))
+        options = content.get("options") or {}
+        error = S.validate_new_game(game_type, options)
+        if error:
+            await self.send_json({"type": "create_error", "error": error})
+            return
+        gid = await S.create_game(game_type, self.pid, self.name, options)
         if gid:
             await self._enter_game(gid)
 

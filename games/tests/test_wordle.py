@@ -49,6 +49,30 @@ def test_pick_word_is_a_valid_answer():
     assert wordle.is_allowed(w)
 
 
+def test_create_state_uses_valid_custom_word():
+    state = wordle.create_state({"word": "Crane"})
+    assert state["answer"] == "crane"
+
+
+def test_create_state_falls_back_to_random_for_bad_word():
+    state = wordle.create_state({"word": "zzzzz"})
+    assert state["answer"] != "zzzzz"
+    assert wordle.is_allowed(state["answer"])
+
+
+def test_create_state_random_when_no_word():
+    assert wordle.is_allowed(wordle.create_state()["answer"])
+    assert wordle.is_allowed(wordle.create_state({})["answer"])
+
+
+def test_validate_options():
+    assert wordle.validate_options({}) is None
+    assert wordle.validate_options({"word": ""}) is None
+    assert wordle.validate_options({"word": "crane"}) is None
+    assert "5 letters" in wordle.validate_options({"word": "cat"})
+    assert "word list" in wordle.validate_options({"word": "zzzzz"})
+
+
 def _playing(answer="crane", rows=None):
     return {"answer": answer, "rows": rows or [], "status": "playing"}
 

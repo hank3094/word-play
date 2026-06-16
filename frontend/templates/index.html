@@ -92,6 +92,57 @@
 
           <div id="keyboard" class="keyboard"></div>
         </section>
+
+        <!-- ===== NEW GAME MODAL ===== -->
+        <div id="new-game-modal" class="modal" hidden>
+          <div class="modal-card">
+            <h2 class="modal-h">New Wordle</h2>
+            <form id="new-game-form">
+              <label class="radio-row">
+                <input type="radio" name="word-mode" value="random" checked />
+                <span>Random word</span>
+              </label>
+              <label class="radio-row">
+                <input type="radio" name="word-mode" value="custom" />
+                <span>Choose the word</span>
+              </label>
+
+              <div id="custom-word-row" class="custom-word" hidden>
+                <div class="word-input-wrap">
+                  <input
+                    id="custom-word"
+                    class="text-input"
+                    type="password"
+                    maxlength="5"
+                    autocomplete="off"
+                    autocapitalize="characters"
+                    autocorrect="off"
+                    spellcheck="false"
+                    placeholder="SECRET WORD"
+                  />
+                  <button
+                    type="button"
+                    id="toggle-word"
+                    class="btn btn-small btn-icon reveal"
+                    aria-pressed="false"
+                    aria-label="show word"
+                    title="show word"
+                  >
+                    👁
+                  </button>
+                </div>
+                <p class="hint-text">5 letters — your friends will try to guess it.</p>
+              </div>
+
+              <p id="new-game-error" class="error-text" hidden></p>
+
+              <div class="modal-actions">
+                <button type="button" class="btn" data-modal="cancel">CANCEL</button>
+                <button type="submit" class="btn btn-primary">CREATE</button>
+              </div>
+            </form>
+          </div>
+        </div>
       </main>
     </div>
 
