@@ -338,6 +338,27 @@ async def lobby_snapshot() -> dict:
     return {"players": await players_snapshot(), "games": await list_games()}
 
 
+# --- archived game review --------------------------------------------------------------------
+
+
+@database_sync_to_async
+def _db_get_finished_snapshot(gid: str) -> dict | None:
+    from .models import FinishedGame
+
+    fg = FinishedGame.objects.filter(game_id=gid).first()
+    if not fg or not fg.snapshot:
+        return None
+    # Strip owner so the delete button doesn't appear for an archived game.
+    snap = dict(fg.snapshot)
+    snap.pop("owner", None)
+    return snap
+
+
+async def get_finished_snapshot(gid: str) -> dict | None:
+    """Return the stored snapshot for a finished game, or None if not found."""
+    return await _db_get_finished_snapshot(gid)
+
+
 # --- activity log ---------------------------------------------------------------------------
 
 

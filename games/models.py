@@ -6,12 +6,14 @@ from django.db import models
 
 
 class FinishedGame(models.Model):
+    game_id = models.CharField(max_length=64, blank=True, db_index=True)
     game_type = models.CharField(max_length=32, default="wordle")
     answer = models.CharField(max_length=32, blank=True)
     won = models.BooleanField(default=False)
     guesses_used = models.PositiveSmallIntegerField(default=0)
     player_names = models.CharField(max_length=200, blank=True)  # comma-joined participant names
     created_at = models.DateTimeField(auto_now_add=True)
+    snapshot = models.JSONField(null=True, blank=True)  # full game state for later review
 
     class Meta:
         ordering = ["-created_at"]

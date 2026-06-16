@@ -46,13 +46,15 @@ def _clean_color(value) -> str:
 
 
 @database_sync_to_async
-def _save_finished(result: dict, game_type: str) -> None:
+def _save_finished(result: dict, game_type: str, gid: str, snapshot: dict) -> None:
     FinishedGame.objects.create(
+        game_id=gid,
         game_type=game_type,
         answer=result.get("answer", ""),
         won=bool(result.get("won", False)),
         guesses_used=int(result.get("guesses_used", 0)),
         player_names=",".join(result.get("players", []))[:200],
+        snapshot=snapshot,
     )
 
 
@@ -171,9 +173,13 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         gid = str(content.get("gameId", ""))
         snap = await S.join_game(self.pid, gid, self.name, color=self.color)
         if snap:
-            # Only log a join event if the player wasn't already a member (avoids noise on
-            # reconnect, where open_game is re-sent to rejoin the server-side group).
             await self._enter_game(gid)
+            return
+        # Game not in Redis — check if it was saved as a finished game.
+        archived = await S.get_finished_snapshot(gid)
+        if archived:
+            await self._do_leave()  # cleanly exit any current live game
+            await self.send_json({"type": "game", "snapshot": archived})
 
     async def _enter_game(self, gid):
         if self.current_game and self.current_game != gid:
@@ -279,7 +285,9 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
                 )
             await self._broadcast_game(gid)
             if res["finished"]:
-                await _save_finished(res["result"], res["snapshot"]["gameType"])
+                await _save_finished(
+                    res["result"], res["snapshot"]["gameType"], gid, res["snapshot"]
+                )
                 await self._broadcast_lobby()
 
     # --- broadcast helpers ------------------------------------------------
