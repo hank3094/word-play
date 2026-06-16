@@ -22,17 +22,17 @@ import re
 import time
 import uuid
 
+from asgiref.sync import sync_to_async
+
 from .gametypes import get_game_type
 from .redis_client import get_client
 
 PLAYERS_SET = "wp:players"
 GAMES_SET = "wp:games"
-ACTIVITY_KEY = "wp:activity"
 ALIVE_TTL = 45  # seconds; refreshed on every client message / ping
 GAME_TTL = 6 * 3600  # abandoned games self-expire after a few hours
 FEED_MAX = 30  # keep the last N durable feed events per game
-ACTIVITY_MAX = 300  # global activity log entries kept in Redis
-ACTIVITY_PAGE = 50  # events sent per request
+ACTIVITY_PAGE = 50  # events returned per page
 
 
 def _nkey(pid: str) -> str:
@@ -340,30 +340,49 @@ async def lobby_snapshot() -> dict:
 
 # --- activity log ---------------------------------------------------------------------------
 
+# Sync helpers run inside sync_to_async so the ORM can be called from async code.
+
+
+def _db_save_activity(event: dict) -> None:
+    from .models import ActivityEvent
+
+    ActivityEvent.objects.create(ts=event["ts"], event_id=event["id"], data=event)
+
+
+def _db_fetch_activity(offset: int, limit: int) -> tuple[list[dict], bool]:
+    from .models import ActivityEvent
+
+    qs = ActivityEvent.objects.order_by("-ts")
+    total = qs.count()
+    rows = list(qs[offset : offset + limit])
+    events = [row.data for row in reversed(rows)]  # chronological order
+    return events, (offset + limit < total)
+
 
 async def push_activity(event: dict) -> None:
-    """Prepend an event to the global activity log (newest-first in Redis)."""
-    r = get_client()
+    """Persist an activity event to the database."""
     stamped = {**event, "ts": time.time(), "id": uuid.uuid4().hex[:12]}
-    await r.lpush(ACTIVITY_KEY, json.dumps(stamped))
-    await r.ltrim(ACTIVITY_KEY, 0, ACTIVITY_MAX - 1)
+    await sync_to_async(_db_save_activity)(stamped)
 
 
 async def activity_snapshot(offset: int = 0, limit: int = ACTIVITY_PAGE) -> tuple[list[dict], bool]:
     """Return a page of activity in chronological order, plus whether older entries exist."""
-    r = get_client()
-    raw = await r.lrange(ACTIVITY_KEY, offset, offset + limit - 1)
-    total = await r.llen(ACTIVITY_KEY)
-    events = [json.loads(e) for e in reversed(raw)]
-    return events, (offset + limit < total)
+    return await sync_to_async(_db_fetch_activity)(offset, limit)
 
 
 # --- test helper -----------------------------------------------------------------------------
 
 
+def _db_clear_activity() -> None:
+    from .models import ActivityEvent
+
+    ActivityEvent.objects.all().delete()
+
+
 async def reset() -> None:
-    """Flush all wp:* keys (used by tests)."""
+    """Flush all wp:* keys and clear the activity log (used by tests)."""
     r = get_client()
     keys = await r.keys("wp:*")
     if keys:
         await r.delete(*keys)
+    await sync_to_async(_db_clear_activity)()

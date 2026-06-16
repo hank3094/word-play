@@ -7,7 +7,7 @@ from games.gametypes import wordle
 
 
 @pytest.fixture(autouse=True)
-async def _clean():
+async def _clean(transactional_db):
     await redis_client.reset_client()  # fresh fakeredis datastore per test
     await state.reset()
     yield
