@@ -357,15 +357,42 @@ body {
 }
 
 @media (max-width: 660px) {
+  #lobby {
+    overflow-y: auto;
+  }
   .lobby-cols {
     flex-direction: column;
+    flex: none;
   }
   .lobby-cols .panel {
     flex: none;
-    max-height: 40%;
+    max-height: none;
+  }
+  .lobby-cols .panel.games {
+    order: -1;
+  }
+  .lobby-cols .panel .list {
+    flex: none;
+    overflow: visible;
   }
   .history {
+    flex: none;
     max-height: none;
+    margin-bottom: 12px;
+  }
+  .history .list {
+    flex: none;
+    overflow: visible;
+  }
+  .list li {
+    font-size: 15px;
+    padding: 6px 4px;
+  }
+  .game-row .meta {
+    font-size: 12px;
+  }
+  .badge {
+    font-size: 11px;
   }
 }
 
@@ -682,13 +709,27 @@ body {
 }
 
 @media (max-width: 660px) {
+  /* Games with more guess rows than the 6-row default (e.g. 7 letters -> 8 rows) get
+     less room per row, so shrink the keyboard, feed and board gaps to give the board
+     more of the available height. --rows is set on .view by board.js. */
   .kb-key {
     max-width: none;
-    height: 52px;
+    height: clamp(36px, calc(52px - (var(--rows, 6) - 6) * 8px), 52px);
     font-size: 18px;
   }
   .kb-key.wide {
     flex: 1.5;
+  }
+  .keyboard {
+    gap: clamp(4px, calc(6px - (var(--rows, 6) - 6) * 1px), 6px);
+  }
+  .feed {
+    min-height: clamp(30px, calc(42px - (var(--rows, 6) - 6) * 4px), 42px);
+    max-height: clamp(40px, calc(64px - (var(--rows, 6) - 6) * 6px), 64px);
+  }
+  .board,
+  .board-row {
+    gap: clamp(3px, calc(6px - (var(--rows, 6) - 6) * 1px), 6px);
   }
 }
 

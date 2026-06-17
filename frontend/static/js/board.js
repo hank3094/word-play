@@ -25,8 +25,11 @@ const Board = (() => {
   } = {}) {
     cols = wordLength;
     maxRows = maxGuesses;
-    root.style.setProperty("--cols", wordLength);
-    root.style.setProperty("--rows", maxGuesses);
+    // Set on the view, not just the board, so sibling UI (keyboard, feed) can also
+    // scale down for word lengths with more guess rows (e.g. 7 letters -> 8 rows).
+    const scope = root.closest(".view") || root;
+    scope.style.setProperty("--cols", wordLength);
+    scope.style.setProperty("--rows", maxGuesses);
     root.innerHTML = "";
     const activeIndex = rows.length;
     for (let r = 0; r < maxRows; r++) {
