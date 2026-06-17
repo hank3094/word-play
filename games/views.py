@@ -13,7 +13,9 @@ from .models import FinishedGame
 
 
 @require_http_methods(["GET"])
-def index(request):
+def index(request, gid=None):
+    # ``gid`` (from the /g/<gid> share link) is read client-side from the URL, not here — this
+    # route just needs to serve the same SPA shell instead of 404ing.
     return render(request, "index.html")
 
 

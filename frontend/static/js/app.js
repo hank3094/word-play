@@ -22,6 +22,21 @@
     views[id].classList.add("is-active");
   }
 
+  // ---- per-game static links (/g/<gameId>) ----
+  function gameIdFromUrl() {
+    const m = location.pathname.match(/^\/g\/([A-Za-z0-9]+)\/?$/);
+    return m ? m[1] : null;
+  }
+  function urlForGame(gid) {
+    return `${location.origin}/g/${gid}`;
+  }
+  // Keep the address bar in sync so the link is always a valid, static URL straight back to
+  // whichever game is currently open (or "/" once back in the lobby) — refreshing or sharing it
+  // lands on the same place.
+  function setGameUrl(gid) {
+    history.replaceState(null, "", gid ? `/g/${gid}` : "/");
+  }
+
   function storedName() {
     return (localStorage.getItem(NAME_KEY) || "").toUpperCase();
   }
@@ -88,6 +103,10 @@
     Net.connect(name, storedColor());
     refreshHistory();
     show("lobby");
+    // A shared /g/<gameId> link: open straight into that game once connected. Net.send queues
+    // this until the socket is up (the same disconnected-queue path used for reconnect replays).
+    const linkedGid = gameIdFromUrl();
+    if (linkedGid) Net.send("open_game", { gameId: linkedGid });
   }
 
   async function refreshHistory() {
@@ -318,6 +337,30 @@
     });
   }
 
+  // ---- copy-link button ----
+  function wireGameLinkButton() {
+    const btn = document.getElementById("game-link-btn");
+    btn.addEventListener("click", async () => {
+      const gid = Wordle.currentGame();
+      if (!gid) return;
+      const url = urlForGame(gid);
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch (_) {
+        // Clipboard API unavailable (e.g. insecure context) — fall back to a selectable prompt.
+        window.prompt("Copy this link:", url);
+        return;
+      }
+      const original = btn.textContent;
+      btn.textContent = "✓";
+      btn.disabled = true;
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.disabled = false;
+      }, 1200);
+    });
+  }
+
   // ---- wordle game ----
   function wireGame() {
     Wordle.init({
@@ -334,12 +377,14 @@
       Wordle.input(key),
     );
     wireGameSettingsModal();
+    wireGameLinkButton();
 
     document.getElementById("wordle-game").addEventListener("click", (e) => {
       if (e.target.closest('[data-nav="leave"]')) {
         Net.send("leave_game");
         Wordle.reset();
         Activity.setCurrentGame(null);
+        setGameUrl(null);
         show("lobby");
       } else if (e.target.closest('[data-nav="delete"]')) {
         if (confirm("Delete this game for everyone?")) {
@@ -406,6 +451,7 @@
         show("wordle-game");
       Wordle.applySnapshot(snap);
       Activity.setCurrentGame(snap.id);
+      setGameUrl(snap.id);
       if (snap.status !== "playing") refreshHistory();
     });
 
@@ -421,12 +467,14 @@
     Net.on("left", () => {
       Wordle.reset();
       Activity.setCurrentGame(null);
+      setGameUrl(null);
       show("lobby");
     });
     // The owner deleted a game we were in — bounce back to the lobby.
     Net.on("game_closed", () => {
       Wordle.reset();
       Activity.setCurrentGame(null);
+      setGameUrl(null);
       show("lobby");
     });
   }
