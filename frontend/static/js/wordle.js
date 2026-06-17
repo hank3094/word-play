@@ -19,34 +19,18 @@ const Wordle = (() => {
     Board.mount(els.board);
 
     // Personal share toggle: claim or release my own live typing.
-    if (els.shareMine) {
-      els.shareMine.addEventListener("change", () => {
+    if (els.shareToggleBtn) {
+      els.shareToggleBtn.addEventListener("click", () => {
         Net.send(iAmSharing() ? "share_stop" : "share_start", { gameId: gid });
       });
     }
-    // Host-only master switches.
-    if (els.allowShare) {
-      els.allowShare.addEventListener("change", () => {
+    // Host-only master switch, in the settings modal.
+    if (els.settingsAllowSharing) {
+      els.settingsAllowSharing.addEventListener("change", () => {
         Net.send("set_allow_sharing", {
           gameId: gid,
-          allowed: els.allowShare.checked,
+          allowed: els.settingsAllowSharing.checked,
         });
-      });
-    }
-    if (els.simulShare) {
-      els.simulShare.addEventListener("change", () => {
-        Net.send("set_simultaneous", {
-          gameId: gid,
-          value: els.simulShare.checked,
-        });
-      });
-    }
-    // Host stops a specific sharer via the ✕ on their players-list badge.
-    if (els.players) {
-      els.players.addEventListener("click", (e) => {
-        const btn = e.target.closest(".share-stop");
-        if (btn)
-          Net.send("share_stop", { gameId: gid, targetId: btn.dataset.pid });
       });
     }
   }
@@ -189,14 +173,12 @@ const Wordle = (() => {
     if (!b) return;
 
     // Your own letters are always solid and on top; the cursor shows only while you type.
-    let current = buffer.length ? buffer : pending ? pending : "";
-    let showCursor = !!buffer.length;
-    let tint = null;
+    const current = buffer.length ? buffer : pending ? pending : "";
+    const showCursor = !!buffer.length;
+    // You only see others' live typing while you're sharing yours too.
     let ghosts = null;
-
-    const sharers = (snap && snap.sharers) || [];
-    if (snap && snap.simultaneous) {
-      // Everyone overlaid: other sharers' letters ghost beneath your own.
+    if (iAmSharing()) {
+      const sharers = (snap && snap.sharers) || [];
       ghosts = sharers
         .filter((pid) => pid !== myId)
         .map((pid) => ({
@@ -204,21 +186,12 @@ const Wordle = (() => {
           color: colorOf(pid),
         }))
         .filter((g) => g.text);
-    } else if (!buffer.length && !pending) {
-      // Exclusive mode: an idle viewer mirrors the single sharer, tinted in their colour.
-      const sharerPid = sharers.find((pid) => pid !== myId);
-      if (sharerPid) {
-        current = (typingPeers[sharerPid] || {}).text || "";
-        tint = colorOf(sharerPid);
-        showCursor = false;
-      }
     }
 
     Board.render({
       rows: b.rows,
       current,
       showCursor,
-      tint,
       ghosts,
       wordLength: b.wordLength,
       maxGuesses: b.maxGuesses,
@@ -231,18 +204,14 @@ const Wordle = (() => {
       return;
     }
     const sharers = snap.sharers || [];
-    const host = iAmHost();
     const parts = snap.players.map((p) => {
       const style = safeColor(p.color) ? ` style="color:${p.color}"` : "";
-      let badge = "";
-      if (sharers.includes(p.id)) {
-        // The host can stop a specific sharer; everyone else just sees the indicator.
-        badge = host
-          ? ` <button class="share-stop" data-pid="${escapeHtml(
-              p.id,
-            )}" title="stop ${escapeHtml(p.name)} sharing">📡✕</button>`
-          : ` <span class="share-badge" title="sharing">📡</span>`;
-      }
+      const sharing = sharers.includes(p.id);
+      const badge = ` <span class="share-badge${
+        sharing ? " is-on" : ""
+      }" title="${escapeHtml(p.name)} is ${
+        sharing ? "sharing" : "not sharing"
+      }">📡</span>`;
       return `<span class="dot"${style}>●</span>${escapeHtml(p.name)}${badge}`;
     });
     els.players.innerHTML = parts.join(" ");
@@ -283,28 +252,25 @@ const Wordle = (() => {
     els.feed.innerHTML = lines.join("");
   }
 
-  // Personal "share my typing" checkbox + host-only allow/simultaneous checkboxes.
+  // Personal sharing toggle button + the host-only settings button that opens the settings modal.
   function renderShareControls() {
     const playing = isPlaying();
     const allow = !!snap.allowSharing;
-    const simul = !!snap.simultaneous;
     const mine = iAmSharing();
 
-    if (els.shareMineRow) {
-      els.shareMineRow.hidden = !playing || !allow;
-      els.shareMine.checked = mine;
-      // In exclusive mode you can only claim sharing when nobody else holds it.
-      const blocked = !simul && !mine && (snap.sharers || []).length > 0;
-      els.shareMine.disabled = blocked;
+    if (els.shareToggleBtn) {
+      els.shareToggleBtn.hidden = !playing || !allow;
+      els.shareToggleBtn.textContent = mine
+        ? "📡 SHARING ON"
+        : "📡 SHARING OFF";
+      els.shareToggleBtn.setAttribute("aria-pressed", String(mine));
+      els.shareToggleBtn.classList.toggle("is-on", mine);
     }
-    if (els.allowShareRow) {
-      els.allowShareRow.hidden = !playing || !iAmHost();
-      els.allowShare.checked = allow;
+    if (els.settingsBtn) {
+      els.settingsBtn.hidden = !playing || !iAmHost();
     }
-    if (els.simulShareRow) {
-      els.simulShareRow.hidden = !playing || !iAmHost();
-      els.simulShare.checked = simul;
-      els.simulShare.disabled = !allow;
+    if (els.settingsAllowSharing) {
+      els.settingsAllowSharing.checked = allow;
     }
   }
 

@@ -303,6 +303,21 @@
     });
   }
 
+  // ---- game settings modal ----
+  function wireGameSettingsModal() {
+    const modal = document.getElementById("game-settings-modal");
+    document
+      .getElementById("game-settings-btn")
+      .addEventListener("click", () => {
+        modal.hidden = false;
+      });
+    modal.addEventListener("click", (e) => {
+      if (e.target.closest('[data-modal="cancel"]') || e.target === modal) {
+        modal.hidden = true;
+      }
+    });
+  }
+
   // ---- wordle game ----
   function wireGame() {
     Wordle.init({
@@ -311,16 +326,14 @@
       players: document.getElementById("wordle-players"),
       status: document.getElementById("wordle-status"),
       delete: document.getElementById("wordle-delete"),
-      shareMine: document.getElementById("share-mine"),
-      shareMineRow: document.getElementById("share-mine-row"),
-      allowShare: document.getElementById("allow-share"),
-      allowShareRow: document.getElementById("allow-share-row"),
-      simulShare: document.getElementById("simul-share"),
-      simulShareRow: document.getElementById("simul-share-row"),
+      shareToggleBtn: document.getElementById("share-toggle-btn"),
+      settingsBtn: document.getElementById("game-settings-btn"),
+      settingsAllowSharing: document.getElementById("settings-allow-sharing"),
     });
     Keyboard.render(document.getElementById("keyboard"), (key) =>
       Wordle.input(key),
     );
+    wireGameSettingsModal();
 
     document.getElementById("wordle-game").addEventListener("click", (e) => {
       if (e.target.closest('[data-nav="leave"]')) {

@@ -97,7 +97,6 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
             "share_start": self._share_start,
             "share_stop": self._share_stop,
             "set_allow_sharing": self._set_allow_sharing,
-            "set_simultaneous": self._set_simultaneous,
         }.get(content.get("type"))
         if handler:
             await handler(content)
@@ -161,21 +160,13 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
 
     async def _share_stop(self, content):
         gid = str(content.get("gameId", ""))
-        target = str(content.get("targetId") or "") or None
-        if gid == self.current_game and await S.share_stop(self.pid, gid, target):
+        if gid == self.current_game and await S.share_stop(self.pid, gid):
             await self._broadcast_game(gid)
 
     async def _set_allow_sharing(self, content):
         gid = str(content.get("gameId", ""))
         if gid == self.current_game and await S.set_allow_sharing(
             self.pid, gid, bool(content.get("allowed"))
-        ):
-            await self._broadcast_game(gid)
-
-    async def _set_simultaneous(self, content):
-        gid = str(content.get("gameId", ""))
-        if gid == self.current_game and await S.set_simultaneous(
-            self.pid, gid, bool(content.get("value"))
         ):
             await self._broadcast_game(gid)
 

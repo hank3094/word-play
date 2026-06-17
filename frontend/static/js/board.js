@@ -10,17 +10,15 @@ const Board = (() => {
   }
 
   // rows: [{word, marks}]. The active row shows the live letters:
-  //   current  — your own (or a single exclusive sharer's) letters, drawn solid on top.
+  //   current    — your own letters, drawn solid on top.
   //   showCursor — whether to show the next-cell cursor (true only when it's your own typing).
-  //   tint     — colour for a single exclusive sharer's mirrored letters (pastel tile fill).
-  //   ghosts   — [{text, color}] from other simultaneous sharers, overlaid beneath at low opacity.
+  //   ghosts     — [{text, color}] from other sharers, overlaid beneath at low opacity.
   function render({
     rows = [],
     current = "",
     showCursor = true,
     wordLength = 5,
     maxGuesses = 6,
-    tint = null,
     ghosts = null,
   } = {}) {
     cols = wordLength;
@@ -62,9 +60,6 @@ const Board = (() => {
             // A text node keeps the solid letter on top of any ghost spans.
             tile.appendChild(document.createTextNode(ch));
             tile.classList.add("filled");
-            if (tint) {
-              tile.style.background = `color-mix(in srgb, ${tint} 30%, var(--panel))`;
-            }
           } else if (showCursor && c === current.length) {
             tile.classList.add("cursor"); // next cell to fill
           }

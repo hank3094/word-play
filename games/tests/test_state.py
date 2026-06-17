@@ -160,40 +160,27 @@ async def test_sharing_defaults(fixed_answer):
     gid = await state.create_game("wordle", "p1", "ANA")
     snap = await state.game_snapshot(gid)
     assert snap["allowSharing"] is True
-    assert snap["simultaneous"] is False
     assert snap["sharers"] == []
 
 
-async def test_exclusive_only_one_sharer(fixed_answer):
+async def test_sharing_is_simultaneous_for_everyone(fixed_answer):
     gid = await state.create_game("wordle", "p1", "ANA")
-    await state.join_game("p2", gid, "BOB")
+    await state.join_game("p2", gid, "BOB")  # auto-shares since allow_sharing defaults True
     assert await state.share_start("p1", gid) is True
-    # someone else can't share while p1 holds it
-    assert await state.share_start("p2", gid) is False
+    # both players may share at once — no exclusivity
     snap = await state.game_snapshot(gid)
-    assert snap["sharers"] == ["p1"]
+    assert set(snap["sharers"]) == {"p1", "p2"}
 
 
-async def test_share_stop_self_and_host_revoke(fixed_answer):
+async def test_share_stop_self_only(fixed_answer):
     gid = await state.create_game("wordle", "p1", "ANA")  # p1 is owner/host
     await state.join_game("p2", gid, "BOB")
-    await state.set_simultaneous("p1", gid, True)  # let both share
-    assert "p2" in (await state.game_snapshot(gid))["sharers"]
+    await state.share_start("p1", gid)
+    await state.share_start("p2", gid)
     # a player can stop themselves
     assert await state.share_stop("p2", gid) is True
     assert "p2" not in (await state.game_snapshot(gid))["sharers"]
-    # the host can stop another player
-    assert await state.share_stop("p1", gid, "p1") is True  # p1 stops self too
-    await state.share_start("p2", gid)
-    assert await state.share_stop("p1", gid, "p2") is True  # host revokes p2
-    assert (await state.game_snapshot(gid))["sharers"] == []
-
-
-async def test_non_host_cannot_revoke_others(fixed_answer):
-    gid = await state.create_game("wordle", "p1", "ANA")
-    await state.join_game("p2", gid, "BOB")
-    await state.set_simultaneous("p1", gid, True)
-    assert await state.share_stop("p2", gid, "p1") is False  # p2 is not the host
+    assert "p1" in (await state.game_snapshot(gid))["sharers"]
 
 
 async def test_allow_sharing_off_clears_and_blocks(fixed_answer):
@@ -211,25 +198,21 @@ async def test_set_allow_sharing_owner_only(fixed_answer):
     assert await state.set_allow_sharing("p2", gid, False) is False
 
 
-async def test_simultaneous_populates_and_clears(fixed_answer):
+async def test_join_auto_shares_when_allowed(fixed_answer):
     gid = await state.create_game("wordle", "p1", "ANA")
-    await state.join_game("p2", gid, "BOB")
-    assert await state.set_simultaneous("p1", gid, True) is True
-    assert set((await state.game_snapshot(gid))["sharers"]) == {"p1", "p2"}
-    assert await state.set_simultaneous("p1", gid, False) is True
-    assert (await state.game_snapshot(gid))["sharers"] == []
-
-
-async def test_join_auto_shares_in_simultaneous(fixed_answer):
-    gid = await state.create_game("wordle", "p1", "ANA")
-    await state.set_simultaneous("p1", gid, True)
     snap = await state.join_game("p2", gid, "BOB")
     assert "p2" in snap["sharers"]
+
+
+async def test_join_does_not_share_when_disallowed(fixed_answer):
+    gid = await state.create_game("wordle", "p1", "ANA")
+    await state.set_allow_sharing("p1", gid, False)
+    snap = await state.join_game("p2", gid, "BOB")
+    assert "p2" not in snap["sharers"]
 
 
 async def test_leave_removes_from_sharers(fixed_answer):
     gid = await state.create_game("wordle", "p1", "ANA")
     await state.join_game("p2", gid, "BOB")
-    await state.set_simultaneous("p1", gid, True)
     await state.leave_game("p2", gid)
     assert "p2" not in (await state.game_snapshot(gid))["sharers"]
