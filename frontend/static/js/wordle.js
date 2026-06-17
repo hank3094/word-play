@@ -13,6 +13,9 @@ const Wordle = (() => {
   let prevRows = 0;
   let typingPeers = {}; // pid -> {name, text}: other players' live typing (only sharers send it)
   let lastTypingSent = 0;
+  let guessAckTimer = null; // watches for a stalled guess send (see armGuessAckTimeout)
+  let pendingGuessRequestId = null; // lets a forced retry replay, not duplicate, the same guess
+  const GUESS_ACK_TIMEOUT_MS = 5000;
 
   function init(refs) {
     els = refs;
@@ -46,6 +49,8 @@ const Wordle = (() => {
     rejectMsg = null;
     prevRows = 0;
     typingPeers = {};
+    clearGuessAckTimeout();
+    pendingGuessRequestId = null;
   }
 
   function reset() {
@@ -56,6 +61,8 @@ const Wordle = (() => {
     rejectMsg = null;
     prevRows = 0;
     typingPeers = {};
+    clearGuessAckTimeout();
+    pendingGuessRequestId = null;
   }
 
   function board() {
@@ -75,6 +82,8 @@ const Wordle = (() => {
       rejectMsg = null;
       typingPeers = {};
       prevRows = s.board.rows.length;
+      clearGuessAckTimeout();
+      pendingGuessRequestId = null;
     }
     render();
   }
@@ -92,15 +101,16 @@ const Wordle = (() => {
     const len = board().wordLength;
     if (key === "enter") {
       if (buffer.length === len) {
-        Net.send("game_action", {
-          gameId: gid,
-          action: "guess",
-          data: { word: buffer },
-        });
         // Clear the buffer immediately so the next word's letters aren't dropped (and a rejected
         // word can't get stuck). Keep it visible as `pending` until the server replies.
         pending = buffer;
         buffer = "";
+        // Identifies this exact submission so a forced retry (see sendGuess) replays the same
+        // request rather than the server mistaking it for a fresh guess and double-counting it.
+        pendingGuessRequestId =
+          (crypto.randomUUID && crypto.randomUUID()) ||
+          `${Date.now()}-${Math.random()}`;
+        sendGuess(pending);
         renderBoard();
       } else {
         Board.flashInvalid();
@@ -133,6 +143,8 @@ const Wordle = (() => {
   function onRejected(reason) {
     // The submitted word wasn't accepted: flash it, explain why, then drop it so the user can type
     // a fresh guess. The explanation stays until they start retyping.
+    clearGuessAckTimeout();
+    pendingGuessRequestId = null;
     rejectMsg = rejectText(reason);
     Board.flashInvalid();
     renderFeed();
@@ -140,6 +152,44 @@ const Wordle = (() => {
       pending = null;
       renderBoard();
     }, 360);
+  }
+
+  // Submit a guess, and watch for it landing. If the server hasn't responded (a new snapshot row,
+  // or a rejection) within GUESS_ACK_TIMEOUT_MS, the send likely silently failed — e.g. a "zombie"
+  // socket that reports open but is actually dead, so the usual reconnect-and-replay (Net.send's
+  // disconnected-queue path) never kicks in. Force a fresh connection and resend in that case.
+  function sendGuess(word) {
+    Net.send("game_action", {
+      gameId: gid,
+      action: "guess",
+      data: { word, requestId: pendingGuessRequestId },
+    });
+    armGuessAckTimeout(word);
+  }
+
+  function armGuessAckTimeout(word) {
+    clearGuessAckTimeout();
+    guessAckTimer = setTimeout(() => {
+      if (pending !== word) return; // already resolved by the time the timeout fires
+      // Same requestId as the original send: the server treats this as a replay of the same
+      // guess (see wordle.py's duplicate check) rather than a second, distinct guess.
+      Net.forceRetry("game_action", {
+        gameId: gid,
+        action: "guess",
+        data: { word, requestId: pendingGuessRequestId },
+      });
+      armGuessAckTimeout(word); // keep watching in case the retry also stalls
+    }, GUESS_ACK_TIMEOUT_MS);
+  }
+
+  // Only clears the watchdog timer — NOT pendingGuessRequestId, which armGuessAckTimeout's retry
+  // still needs to read after rearming (it calls this first thing). Callers that know the guess
+  // has fully resolved clear pendingGuessRequestId themselves.
+  function clearGuessAckTimeout() {
+    if (guessAckTimer) {
+      clearTimeout(guessAckTimer);
+      guessAckTimer = null;
+    }
   }
 
   // --- sharing helpers ---

@@ -118,6 +118,34 @@ async def test_apply_guess_changes_state_and_feed(fixed_answer):
     assert snap["board"]["answer"] is None
 
 
+async def test_duplicate_guess_request_id_is_idempotent(fixed_answer):
+    gid = await state.create_game("wordle", "p1", "ANA")
+    res = await state.apply_action(
+        gid, "p1", "ANA", "guess", {"word": "slate", "requestId": "abc123"}
+    )
+    assert res["ok"] and res["changed"]
+    assert len(res["snapshot"]["board"]["rows"]) == 1
+
+    # A retried send of the exact same guess (same requestId) — e.g. after a forced reconnect —
+    # must not add a second row.
+    res2 = await state.apply_action(
+        gid, "p1", "ANA", "guess", {"word": "slate", "requestId": "abc123"}
+    )
+    assert res2["ok"] is True
+    assert res2["changed"] is False
+    assert res2["events"][0]["kind"] == "duplicate"
+    snap = await state.game_snapshot(gid)
+    assert len(snap["board"]["rows"]) == 1
+
+    # A genuinely new guess (different requestId) still lands normally.
+    res3 = await state.apply_action(
+        gid, "p1", "ANA", "guess", {"word": "crony", "requestId": "def456"}
+    )
+    assert res3["ok"] and res3["changed"]
+    snap = await state.game_snapshot(gid)
+    assert len(snap["board"]["rows"]) == 2
+
+
 async def test_apply_typing_is_transient(fixed_answer):
     gid = await state.create_game("wordle", "p1", "ANA")
     res = await state.apply_action(gid, "p1", "ANA", "typing", {"text": "cra"})

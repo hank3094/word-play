@@ -110,6 +110,28 @@ const Net = (() => {
     }
   }
 
+  // For a send that *looked* successful (socket reported OPEN) but never got a response — e.g. a
+  // "zombie" connection that has gone dead without the browser noticing yet, so close() hasn't
+  // fired. The caller (e.g. a guess with no server reply after a timeout) treats that as a dropped
+  // send: this forces the old socket closed without waiting for its own close handler to schedule
+  // a reconnect (which would race a fresh one), then reconnects immediately and replays the action
+  // once the new connection is welcomed.
+  function forceRetry(type, payload) {
+    pendingAction = { type, payload };
+    setPending(true);
+    reconnectDelay = 1000;
+    if (ws) {
+      ws.onclose = null;
+      ws.onerror = null;
+      try {
+        ws.close();
+      } catch (e) {
+        // already closed/closing — fine, openSocket() below replaces it
+      }
+    }
+    openSocket();
+  }
+
   function flushPending() {
     if (pendingAction && ws && ws.readyState === WebSocket.OPEN) {
       const { type, payload } = pendingAction;
@@ -137,6 +159,7 @@ const Net = (() => {
   return {
     connect,
     send,
+    forceRetry,
     on,
     setStatusCb: (cb) => (statusCb = cb),
     setPendingCb: (cb) => (pendingCb = cb),

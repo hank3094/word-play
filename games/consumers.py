@@ -271,45 +271,50 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
             )
             await self.send_json({"type": "rejected", "reason": reason})
             return
-        if res["changed"]:
-            # Build activity events from the game-type events returned by apply_action.
-            evs = res["events"]
-            guess_ev = next((e for e in evs if e.get("kind") == "guess"), None)
-            win_ev = next((e for e in evs if e.get("kind") == "win"), None)
-            lose_ev = next((e for e in evs if e.get("kind") == "lose"), None)
-            if guess_ev:
-                if win_ev:
-                    await self._broadcast_activity(
-                        {
-                            "kind": "game_won",
-                            "gameId": gid,
-                            "name": self.name,
-                            "word": guess_ev["word"],
-                            "marks": guess_ev["marks"],
-                            "color": self.color,
-                        }
-                    )
-                else:
-                    await self._broadcast_activity(
-                        {
-                            "kind": "guess",
-                            "gameId": gid,
-                            "name": self.name,
-                            "word": guess_ev["word"],
-                            "marks": guess_ev["marks"],
-                            "color": self.color,
-                        }
-                    )
-            if lose_ev:
+        if not res["changed"]:
+            if any(e.get("kind") == "duplicate" for e in res["events"]):
+                # A retried send of a guess already applied (see wordle.py's requestId check) —
+                # nothing to record, but resync the sender so a stalled-then-recovered client's
+                # "awaiting reply" UI doesn't hang forever.
+                await self._broadcast_game(gid)
+            return
+
+        # Build activity events from the game-type events returned by apply_action.
+        evs = res["events"]
+        guess_ev = next((e for e in evs if e.get("kind") == "guess"), None)
+        win_ev = next((e for e in evs if e.get("kind") == "win"), None)
+        lose_ev = next((e for e in evs if e.get("kind") == "lose"), None)
+        if guess_ev:
+            if win_ev:
                 await self._broadcast_activity(
-                    {"kind": "game_lost", "gameId": gid, "answer": lose_ev["answer"]}
+                    {
+                        "kind": "game_won",
+                        "gameId": gid,
+                        "name": self.name,
+                        "word": guess_ev["word"],
+                        "marks": guess_ev["marks"],
+                        "color": self.color,
+                    }
                 )
-            await self._broadcast_game(gid)
-            if res["finished"]:
-                await _save_finished(
-                    res["result"], res["snapshot"]["gameType"], gid, res["snapshot"]
+            else:
+                await self._broadcast_activity(
+                    {
+                        "kind": "guess",
+                        "gameId": gid,
+                        "name": self.name,
+                        "word": guess_ev["word"],
+                        "marks": guess_ev["marks"],
+                        "color": self.color,
+                    }
                 )
-                await self._broadcast_lobby()
+        if lose_ev:
+            await self._broadcast_activity(
+                {"kind": "game_lost", "gameId": gid, "answer": lose_ev["answer"]}
+            )
+        await self._broadcast_game(gid)
+        if res["finished"]:
+            await _save_finished(res["result"], res["snapshot"]["gameType"], gid, res["snapshot"])
+            await self._broadcast_lobby()
 
     # --- broadcast helpers ------------------------------------------------
     async def _broadcast_lobby(self):

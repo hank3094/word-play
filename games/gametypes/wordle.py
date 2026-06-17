@@ -122,10 +122,22 @@ def handle_action(state: dict, pid: str, name: str, action: str, data: dict):
     ``events`` is a list of dicts. ``{"kind": "invalid", ...}`` means the action was rejected and
     the state is unchanged (only the acting player should be notified). ``{"kind": "typing", ...}``
     is a transient liveness event (no board change). A ``guess`` yields a ``guess`` event plus a
-    ``win``/``lose`` event when the game ends.
+    ``win``/``lose`` event when the game ends. ``{"kind": "duplicate"}`` means a guess was a
+    retried send of one already applied (see ``requestId`` below) — also transient, no board
+    change, but the caller should still resync the sender so their UI doesn't hang.
     """
     word_length = state.get("word_length", WORD_LENGTH)
     max_guesses = state.get("max_guesses", MAX_GUESSES)
+
+    # A client that didn't hear back after submitting a guess (e.g. a stalled/zombie connection)
+    # may force a reconnect and resend the identical action. ``requestId`` lets us recognise that
+    # replay and treat it as a no-op instead of recording the same guess twice. Checked ahead of
+    # the finished-game guard too, since the original send may be exactly what finished the game.
+    if action == "guess":
+        request_id = str(data.get("requestId") or "")
+        last = state.get("last_guess_request") or {}
+        if request_id and last.get("pid") == pid and last.get("requestId") == request_id:
+            return state, [{"kind": "duplicate"}]
 
     if is_finished(state):
         return state, [{"kind": "invalid", "reason": "finished"}]
@@ -148,7 +160,12 @@ def handle_action(state: dict, pid: str, name: str, action: str, data: dict):
             status = LOST
         else:
             status = PLAYING
-        new_state = {**state, "rows": rows, "status": status}
+        new_state = {
+            **state,
+            "rows": rows,
+            "status": status,
+            "last_guess_request": {"pid": pid, "requestId": str(data.get("requestId") or "")},
+        }
         events = [{"kind": "guess", "name": name, "word": word, "marks": marks}]
         if status == WON:
             events.append({"kind": "win", "name": name, "word": word})

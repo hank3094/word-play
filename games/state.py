@@ -291,8 +291,8 @@ async def apply_action(gid: str, pid: str, name: str, action: str, data: dict) -
 
     Returns ``{"ok", "changed", "events", "finished", "result", "snapshot"}``. ``ok`` is False (and
     ``changed`` False) when the action was rejected — only the acting player should be told. A
-    transient ``typing`` action never changes state. When a game finishes, ``result`` carries the
-    payload for the SQLite history row.
+    transient ``typing`` or ``duplicate`` (a retried guess already applied) action never changes
+    state. When a game finishes, ``result`` carries the payload for the SQLite history row.
     """
     blob = await _load(gid)
     mod = get_game_type(blob["type"]) if blob else None
@@ -302,7 +302,7 @@ async def apply_action(gid: str, pid: str, name: str, action: str, data: dict) -
     was_finished = mod.is_finished(blob["state"])
     new_state, events = mod.handle_action(blob["state"], pid, name, action, data)
     rejected = any(e.get("kind") == "invalid" for e in events)
-    transient = all(e.get("kind") in ("typing",) for e in events)
+    transient = all(e.get("kind") in ("typing", "duplicate") for e in events)
 
     if rejected or transient:
         return {
