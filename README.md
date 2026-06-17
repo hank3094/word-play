@@ -35,6 +35,21 @@ frontend leave room for more cooperative games — **word search**, **crosswords
 without touching the lobby, presence, feed, or transport. See
 [docs/adding-a-game.md](docs/adding-a-game.md).
 
+Features to add:
+* Option for lower-case letters (throughout)
+* show word stats (popularity in corpus, definition) when prompted
+
+Games to implement:
+* secret wordle (it only tells you how many are correct and how many are in the correct position)
+* hangman
+	* Allow option to keep on going if you want
+	* Draw the hangman (animated?)
+* word search (bananagrams style?)
+* classic bananagrams
+	* will need to be able to view game history, with some diff algorithm so that changes are minimised
+* crossword
+
+
 ## Architecture
 
 - **Django + Channels (Daphne ASGI)** — one WebSocket endpoint (`/ws/play/`) drives the lobby and
