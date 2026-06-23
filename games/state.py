@@ -379,7 +379,7 @@ async def list_games() -> list[dict]:
                 "status": blob["status"],
                 "count": len(blob["players"]),
                 "players": player_names,
-                "wordLength": blob.get("state", {}).get("word_length", 5),
+                "wordLength": blob.get("state", {}).get("word_length"),
             }
         )
     return out

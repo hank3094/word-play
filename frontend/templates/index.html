@@ -64,7 +64,7 @@
             <section class="panel games">
               <div class="panel-h-row">
                 <h2 class="panel-h">GAMES</h2>
-                <button id="new-game" class="btn btn-small">+ NEW WORDLE</button>
+                <button id="new-game" class="btn btn-small">+ NEW GAME</button>
               </div>
               <ul id="games-list" class="list games"></ul>
             </section>
@@ -127,6 +127,61 @@
           <div id="keyboard" class="keyboard"></div>
         </section>
 
+        <!-- ===== HANGMAN GAME ===== -->
+        <section id="hangman-game" class="view">
+          <header class="game-head">
+            <button class="btn btn-back" data-nav="leave">← LOBBY</button>
+            <span id="hangman-players" class="game-players"></span>
+            <span id="hangman-status" class="game-status"></span>
+            <button
+              id="hangman-delete"
+              class="btn btn-small btn-danger"
+              data-nav="delete"
+              hidden
+            >
+              ✕ DELETE
+            </button>
+            <button
+              id="hangman-link-btn"
+              class="btn btn-small"
+              aria-label="copy link to this game"
+              title="copy link to this game"
+            >
+              🔗
+            </button>
+            <button class="btn btn-small activity-toggle-btn" aria-label="activity log">LOG</button>
+          </header>
+
+          <div class="hangman-wrap">
+            <!-- Slightly wobbly curves (not perfectly straight lines) for a hand-drawn look;
+                 the head stays a <circle> since a hand-drawn stick-figure head still reads as
+                 round. Each part is "drawn" stroke-by-stroke via a stroke-dashoffset animation
+                 wired up in hangman.js, starting from nothing — see renderFigure(). -->
+            <svg class="hangman-figure" viewBox="0 0 200 220" aria-hidden="true">
+              <path d="M20,210 Q70,213 120,210" class="hm-part hm-base" />
+              <path d="M50,210 Q46,115 50,20" class="hm-part hm-pole" />
+              <path d="M50,20 Q90,17 130,20" class="hm-part hm-beam" />
+              <path d="M130,20 Q133,30 130,40" class="hm-part hm-rope" />
+              <circle cx="130" cy="55" r="15" class="hm-part hm-head" />
+              <path d="M130,70 Q126,95 130,120" class="hm-part hm-torso" />
+              <path d="M130,80 Q119,87 110,100" class="hm-part hm-arm-l" />
+              <path d="M130,80 Q142,87 150,100" class="hm-part hm-arm-r" />
+              <path d="M130,120 Q121,134 115,150" class="hm-part hm-leg-l" />
+              <path d="M130,120 Q140,134 145,150" class="hm-part hm-leg-r" />
+            </svg>
+            <div id="hangman-word" class="hangman-word"></div>
+          </div>
+
+          <div id="hangman-reveal-row" class="hangman-reveal-row" hidden>
+            <span>Out of guesses.</span>
+            <button id="hangman-reveal-btn" class="btn btn-small">Reveal the word</button>
+          </div>
+
+          <div id="hangman-feed" class="feed"></div>
+
+          <div id="hangman-keyboard" class="keyboard"></div>
+        </section>
+
         <!-- ===== EDIT PROFILE MODAL ===== -->
         <div id="edit-profile-modal" class="modal" hidden>
           <div class="modal-card">
@@ -161,53 +216,110 @@
         <!-- ===== NEW GAME MODAL ===== -->
         <div id="new-game-modal" class="modal" hidden>
           <div class="modal-card">
-            <h2 class="modal-h">New Wordle</h2>
+            <h2 class="modal-h">New game</h2>
             <form id="new-game-form">
-              <label class="radio-row">
-                <input type="radio" name="word-mode" value="random" checked />
-                <span>Random word</span>
-              </label>
-              <label class="radio-row">
-                <input type="radio" name="word-mode" value="custom" />
-                <span>Choose the word</span>
-              </label>
-
-              <div class="word-length-row">
-                <span class="radio-label">Word length</span>
-                <div class="word-length-options">
-                  <label class="radio-row inline"><input type="radio" name="word-length" value="4" /> 4</label>
-                  <label class="radio-row inline"><input type="radio" name="word-length" value="5" checked /> 5</label>
-                  <label class="radio-row inline"><input type="radio" name="word-length" value="6" /> 6</label>
-                  <label class="radio-row inline"><input type="radio" name="word-length" value="7" /> 7</label>
+              <div id="game-type-row" class="word-length-row">
+                <span class="radio-label">Game</span>
+                <div id="game-type-options" class="word-length-options">
+                  <!-- populated by app.js from /api/game-types -->
                 </div>
               </div>
 
-              <div id="custom-word-row" class="custom-word" hidden>
-                <div class="word-input-wrap">
-                  <input
-                    id="custom-word"
-                    class="text-input"
-                    type="password"
-                    maxlength="5"
-                    autocomplete="off"
-                    autocapitalize="characters"
-                    autocorrect="off"
-                    spellcheck="false"
-                    placeholder="SECRET WORD"
-                    data-dynamic-maxlength
-                  />
-                  <button
-                    type="button"
-                    id="toggle-word"
-                    class="btn btn-small btn-icon reveal"
-                    aria-pressed="false"
-                    aria-label="show word"
-                    title="show word"
-                  >
-                    👁
-                  </button>
+              <div id="wordle-options" data-gametype-panel="wordle">
+                <label class="radio-row">
+                  <input type="radio" name="word-mode" value="random" checked />
+                  <span>Random word</span>
+                </label>
+                <label class="radio-row">
+                  <input type="radio" name="word-mode" value="custom" />
+                  <span>Choose the word</span>
+                </label>
+
+                <div class="word-length-row">
+                  <span class="radio-label">Word length</span>
+                  <div class="word-length-options">
+                    <label class="radio-row inline"><input type="radio" name="word-length" value="4" /> 4</label>
+                    <label class="radio-row inline"><input type="radio" name="word-length" value="5" checked /> 5</label>
+                    <label class="radio-row inline"><input type="radio" name="word-length" value="6" /> 6</label>
+                    <label class="radio-row inline"><input type="radio" name="word-length" value="7" /> 7</label>
+                  </div>
                 </div>
-                <p id="word-length-hint" class="hint-text">5 letters — your friends will try to guess it.</p>
+
+                <div id="custom-word-row" class="custom-word" hidden>
+                  <div class="word-input-wrap">
+                    <input
+                      id="custom-word"
+                      class="text-input"
+                      type="password"
+                      maxlength="5"
+                      autocomplete="off"
+                      autocapitalize="characters"
+                      autocorrect="off"
+                      spellcheck="false"
+                      placeholder="SECRET WORD"
+                      data-dynamic-maxlength
+                    />
+                    <button
+                      type="button"
+                      id="toggle-word"
+                      class="btn btn-small btn-icon reveal"
+                      aria-pressed="false"
+                      aria-label="show word"
+                      title="show word"
+                    >
+                      👁
+                    </button>
+                  </div>
+                  <p id="word-length-hint" class="hint-text">5 letters — your friends will try to guess it.</p>
+                </div>
+              </div>
+
+              <div id="hangman-options" data-gametype-panel="hangman" hidden>
+                <label class="radio-row">
+                  <input type="radio" name="hangman-word-mode" value="random" checked />
+                  <span>Random word</span>
+                </label>
+                <label class="radio-row">
+                  <input type="radio" name="hangman-word-mode" value="custom" />
+                  <span>Choose the word</span>
+                </label>
+
+                <div id="hangman-difficulty-row" class="word-length-row">
+                  <span class="radio-label">Difficulty</span>
+                  <div class="word-length-options">
+                    <label class="radio-row inline"><input type="radio" name="hangman-difficulty" value="easy" /> Easy</label>
+                    <label class="radio-row inline"><input type="radio" name="hangman-difficulty" value="medium" checked /> Medium</label>
+                    <label class="radio-row inline"><input type="radio" name="hangman-difficulty" value="hard" /> Hard</label>
+                    <label class="radio-row inline"><input type="radio" name="hangman-difficulty" value="nightmare" /> Nightmare</label>
+                  </div>
+                </div>
+
+                <div id="hangman-custom-word-row" class="custom-word" hidden>
+                  <div class="word-input-wrap">
+                    <input
+                      id="hangman-custom-word"
+                      class="text-input"
+                      type="password"
+                      maxlength="24"
+                      autocomplete="off"
+                      autocapitalize="characters"
+                      autocorrect="off"
+                      spellcheck="false"
+                      placeholder="SECRET WORD"
+                    />
+                    <button
+                      type="button"
+                      id="hangman-toggle-word"
+                      class="btn btn-small btn-icon reveal"
+                      aria-pressed="false"
+                      aria-label="show word"
+                      title="show word"
+                    >
+                      👁
+                    </button>
+                  </div>
+                  <p class="hint-text">2-24 letters — your friends will guess it one letter at a time.</p>
+                </div>
               </div>
 
               <p id="new-game-error" class="error-text" hidden></p>
@@ -277,6 +389,7 @@
     <script src="{% static 'js/keyboard.js' %}"></script>
     <script src="{% static 'js/board.js' %}"></script>
     <script src="{% static 'js/wordle.js' %}"></script>
+    <script src="{% static 'js/hangman.js' %}"></script>
     <script src="{% static 'js/lobby.js' %}"></script>
     <script src="{% static 'js/activity.js' %}"></script>
     <script src="{% static 'js/app.js' %}"></script>

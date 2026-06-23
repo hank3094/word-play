@@ -14,9 +14,9 @@ it in ``GAME_TYPES``, then add a matching client renderer. The consumer, Redis s
 and feed are all game-agnostic. See docs/adding-a-game.md.
 """
 
-from . import wordle
+from . import hangman, wordle
 
-GAME_TYPES = {wordle.KEY: wordle}
+GAME_TYPES = {wordle.KEY: wordle, hangman.KEY: hangman}
 
 
 def get_game_type(key: str):

@@ -22,6 +22,16 @@
     views[id].classList.add("is-active");
   }
 
+  // ---- per-game-type dispatch (so the rest of app.js doesn't hardcode "Wordle") ----
+  const GAME_VIEWS = {
+    wordle: { viewId: "wordle-game", controller: Wordle },
+    hangman: { viewId: "hangman-game", controller: Hangman },
+  };
+  let activeGameType = null; // which entry of GAME_VIEWS is currently open, if any
+  function activeController() {
+    return activeGameType ? GAME_VIEWS[activeGameType].controller : null;
+  }
+
   // ---- per-game static links (/g/<gameId>) ----
   function gameIdFromUrl() {
     const m = location.pathname.match(/^\/g\/([A-Za-z0-9]+)\/?$/);
@@ -215,11 +225,18 @@
     return {
       modal: document.getElementById("new-game-modal"),
       form: document.getElementById("new-game-form"),
+      gameTypeOptions: document.getElementById("game-type-options"),
+      error: document.getElementById("new-game-error"),
+      // wordle
       customRow: document.getElementById("custom-word-row"),
       wordInput: document.getElementById("custom-word"),
       toggle: document.getElementById("toggle-word"),
-      error: document.getElementById("new-game-error"),
       hint: document.getElementById("word-length-hint"),
+      // hangman
+      hangmanDifficultyRow: document.getElementById("hangman-difficulty-row"),
+      hangmanCustomRow: document.getElementById("hangman-custom-word-row"),
+      hangmanWordInput: document.getElementById("hangman-custom-word"),
+      hangmanToggle: document.getElementById("hangman-toggle-word"),
     };
   }
 
@@ -228,23 +245,74 @@
     return radio ? parseInt(radio.value, 10) : 5;
   }
 
+  function selectedGameType(form) {
+    const radio = form.querySelector('input[name="game-type"]:checked');
+    return radio ? radio.value : "wordle";
+  }
+
+  let gameTypesLoaded = false;
+  async function populateGameTypeOptions() {
+    if (gameTypesLoaded) return;
+    gameTypesLoaded = true;
+    const el = modalEls();
+    try {
+      const { gameTypes } = await API.getGameTypes();
+      el.gameTypeOptions.innerHTML = gameTypes
+        .map(
+          (g, i) =>
+            `<label class="radio-row inline">` +
+            `<input type="radio" name="game-type" value="${g.key}" ${
+              i === 0 ? "checked" : ""
+            } /> ${g.label}` +
+            `</label>`,
+        )
+        .join("");
+      el.gameTypeOptions
+        .querySelectorAll('input[name="game-type"]')
+        .forEach((radio) => {
+          radio.addEventListener("change", () =>
+            showGameTypePanel(selectedGameType(el.form)),
+          );
+        });
+    } catch (_) {
+      // Offline at modal-open time: leave the (empty) picker — wordle is still sent by default.
+      gameTypesLoaded = false;
+    }
+  }
+
+  function showGameTypePanel(gameType) {
+    document.querySelectorAll("[data-gametype-panel]").forEach((panel) => {
+      panel.hidden = panel.dataset.gametypePanel !== gameType;
+    });
+  }
+
   function openNewGameModal() {
     const el = modalEls();
+    populateGameTypeOptions();
     el.form.reset();
+    showGameTypePanel(selectedGameType(el.form));
+    el.error.hidden = true;
+    // wordle panel defaults
     el.customRow.hidden = true;
     el.wordInput.value = "";
     el.wordInput.maxLength = 5; // reset alongside the word-length radio (which resets to 5)
     el.wordInput.type = "password"; // masked by default
     el.toggle.setAttribute("aria-pressed", "false");
-    el.error.hidden = true;
     if (el.hint)
       el.hint.textContent = "5 letters — your friends will try to guess it.";
+    // hangman panel defaults
+    el.hangmanDifficultyRow.hidden = false;
+    el.hangmanCustomRow.hidden = true;
+    el.hangmanWordInput.value = "";
+    el.hangmanWordInput.type = "password";
+    el.hangmanToggle.setAttribute("aria-pressed", "false");
     el.modal.hidden = false;
   }
 
   function closeNewGameModal() {
     const el = modalEls();
     el.wordInput.value = ""; // don't leave the secret word lying around
+    el.hangmanWordInput.value = "";
     el.modal.hidden = true;
   }
 
@@ -257,6 +325,7 @@
   function wireNewGameModal() {
     const el = modalEls();
 
+    // ---- wordle fields ----
     // Show/hide the custom-word row with the word-mode radio choice.
     el.form.querySelectorAll('input[name="word-mode"]').forEach((radio) => {
       radio.addEventListener("change", () => {
@@ -288,6 +357,29 @@
       el.wordInput.focus();
     });
 
+    // ---- hangman fields ----
+    // Difficulty only matters for a random word; hide it once the creator picks their own.
+    el.form
+      .querySelectorAll('input[name="hangman-word-mode"]')
+      .forEach((radio) => {
+        radio.addEventListener("change", () => {
+          const custom =
+            el.form.querySelector('input[name="hangman-word-mode"]:checked')
+              .value === "custom";
+          el.hangmanCustomRow.hidden = !custom;
+          el.hangmanDifficultyRow.hidden = custom;
+          el.error.hidden = true;
+          if (custom) el.hangmanWordInput.focus();
+        });
+      });
+
+    el.hangmanToggle.addEventListener("click", () => {
+      const showing = el.hangmanWordInput.type === "text";
+      el.hangmanWordInput.type = showing ? "password" : "text";
+      el.hangmanToggle.setAttribute("aria-pressed", String(!showing));
+      el.hangmanWordInput.focus();
+    });
+
     el.modal.addEventListener("click", (e) => {
       // Cancel button, or a click on the dimmed backdrop.
       if (e.target.closest('[data-modal="cancel"]') || e.target === el.modal) {
@@ -297,6 +389,32 @@
 
     el.form.addEventListener("submit", (e) => {
       e.preventDefault();
+      const gameType = selectedGameType(el.form);
+
+      if (gameType === "hangman") {
+        const custom =
+          el.form.querySelector('input[name="hangman-word-mode"]:checked')
+            .value === "custom";
+        if (!custom) {
+          const difficulty =
+            el.form.querySelector('input[name="hangman-difficulty"]:checked')
+              ?.value || "medium";
+          Net.send("create_game", {
+            gameType: "hangman",
+            options: { difficulty },
+          });
+          return;
+        }
+        const word = el.hangmanWordInput.value.trim().toLowerCase();
+        if (!/^[a-z]{2,24}$/.test(word)) {
+          showModalError("The word must be 2-24 letters.");
+          return;
+        }
+        el.error.hidden = true;
+        Net.send("create_game", { gameType: "hangman", options: { word } });
+        return;
+      }
+
       const len = selectedWordLength(el.form);
       const custom =
         el.form.querySelector('input[name="word-mode"]:checked').value ===
@@ -338,10 +456,10 @@
   }
 
   // ---- copy-link button ----
-  function wireGameLinkButton() {
-    const btn = document.getElementById("game-link-btn");
+  function wireGameLinkButton(btnId) {
+    const btn = document.getElementById(btnId);
     btn.addEventListener("click", async () => {
-      const gid = Wordle.currentGame();
+      const gid = activeController() && activeController().currentGame();
       if (!gid) return;
       const url = urlForGame(gid);
       try {
@@ -363,6 +481,10 @@
 
   // ---- wordle game ----
   function wireGame() {
+    const keyboard = Keyboard.create(
+      document.getElementById("keyboard"),
+      (key) => Wordle.input(key),
+    );
     Wordle.init({
       board: document.getElementById("board"),
       feed: document.getElementById("wordle-feed"),
@@ -372,26 +494,61 @@
       shareToggleBtn: document.getElementById("share-toggle-btn"),
       settingsBtn: document.getElementById("game-settings-btn"),
       settingsAllowSharing: document.getElementById("settings-allow-sharing"),
+      keyboard,
     });
-    Keyboard.render(document.getElementById("keyboard"), (key) =>
-      Wordle.input(key),
-    );
     wireGameSettingsModal();
-    wireGameLinkButton();
+    wireGameLinkButton("game-link-btn");
 
     document.getElementById("wordle-game").addEventListener("click", (e) => {
       if (e.target.closest('[data-nav="leave"]')) {
-        Net.send("leave_game");
-        Wordle.reset();
-        Activity.setCurrentGame(null);
-        setGameUrl(null);
-        show("lobby");
+        leaveCurrentGame();
       } else if (e.target.closest('[data-nav="delete"]')) {
         if (confirm("Delete this game for everyone?")) {
           Net.send("delete_game", { gameId: Wordle.currentGame() });
         }
       }
     });
+  }
+
+  // ---- hangman game ----
+  function wireHangmanGame() {
+    const keyboard = Keyboard.create(
+      document.getElementById("hangman-keyboard"),
+      (letter) => Hangman.input(letter),
+      { lettersOnly: true },
+    );
+    Hangman.init({
+      figure: document.querySelector("#hangman-game .hangman-figure"),
+      word: document.getElementById("hangman-word"),
+      feed: document.getElementById("hangman-feed"),
+      players: document.getElementById("hangman-players"),
+      status: document.getElementById("hangman-status"),
+      delete: document.getElementById("hangman-delete"),
+      revealRow: document.getElementById("hangman-reveal-row"),
+      revealBtn: document.getElementById("hangman-reveal-btn"),
+      keyboard,
+    });
+    wireGameLinkButton("hangman-link-btn");
+
+    document.getElementById("hangman-game").addEventListener("click", (e) => {
+      if (e.target.closest('[data-nav="leave"]')) {
+        leaveCurrentGame();
+      } else if (e.target.closest('[data-nav="delete"]')) {
+        if (confirm("Delete this game for everyone?")) {
+          Net.send("delete_game", { gameId: Hangman.currentGame() });
+        }
+      }
+    });
+  }
+
+  // Shared by every game view's "← LOBBY" button.
+  function leaveCurrentGame() {
+    Net.send("leave_game");
+    if (activeController()) activeController().reset();
+    activeGameType = null;
+    Activity.setCurrentGame(null);
+    setGameUrl(null);
+    show("lobby");
   }
 
   // ---- activity panel ----
@@ -429,10 +586,12 @@
     Net.on("welcome", (m) => {
       Lobby.setMyId(m.id);
       Wordle.setMyId(m.id);
+      Hangman.setMyId(m.id);
       // If the socket dropped while we were in a game, rejoin it after reconnecting so the server
       // re-associates us (a fresh connection starts with no current game).
-      const gid = Wordle.currentGame();
-      if (gid && views["wordle-game"].classList.contains("is-active")) {
+      const gv = activeGameType && GAME_VIEWS[activeGameType];
+      const gid = gv && gv.controller.currentGame();
+      if (gid && views[gv.viewId].classList.contains("is-active")) {
         Net.send("open_game", { gameId: gid });
       }
     });
@@ -444,12 +603,14 @@
 
     Net.on("game", (m) => {
       const snap = m.snapshot;
+      const gv = GAME_VIEWS[snap.gameType];
+      if (!gv) return; // unknown game type — defensive no-op
       closeNewGameModal(); // we successfully created/entered a game
+      activeGameType = snap.gameType;
       // Entering a game (or already in it): make sure the game view is showing.
-      if (Wordle.currentGame() !== snap.id) Wordle.open(snap.id);
-      if (!views["wordle-game"].classList.contains("is-active"))
-        show("wordle-game");
-      Wordle.applySnapshot(snap);
+      if (gv.controller.currentGame() !== snap.id) gv.controller.open(snap.id);
+      if (!views[gv.viewId].classList.contains("is-active")) show(gv.viewId);
+      gv.controller.applySnapshot(snap);
       Activity.setCurrentGame(snap.id);
       setGameUrl(snap.id);
       if (snap.status !== "playing") refreshHistory();
@@ -462,17 +623,25 @@
       Activity.load(m.events, m.offset || 0, !!m.hasMore),
     );
     Net.on("activity_event", (m) => Activity.push(m.event));
-    Net.on("feed", (m) => Wordle.onFeed(m.event));
-    Net.on("rejected", (m) => Wordle.onRejected(m.reason));
+    Net.on(
+      "feed",
+      (m) => activeController() && activeController().onFeed(m.event),
+    );
+    Net.on(
+      "rejected",
+      (m) => activeController() && activeController().onRejected(m.reason),
+    );
     Net.on("left", () => {
-      Wordle.reset();
+      if (activeController()) activeController().reset();
+      activeGameType = null;
       Activity.setCurrentGame(null);
       setGameUrl(null);
       show("lobby");
     });
     // The owner deleted a game we were in — bounce back to the lobby.
     Net.on("game_closed", () => {
-      Wordle.reset();
+      if (activeController()) activeController().reset();
+      activeGameType = null;
       Activity.setCurrentGame(null);
       setGameUrl(null);
       show("lobby");
@@ -482,17 +651,24 @@
   // ---- physical keyboard ----
   function wireKeyboard() {
     window.addEventListener("keydown", (e) => {
-      if (!views["wordle-game"].classList.contains("is-active")) return;
+      const gv = activeGameType && GAME_VIEWS[activeGameType];
+      if (!gv || !views[gv.viewId].classList.contains("is-active")) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "Enter") {
-        e.preventDefault();
-        Wordle.input("enter");
-      } else if (e.key === "Backspace") {
-        e.preventDefault();
-        Wordle.input("back");
+      if (activeGameType === "wordle") {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          gv.controller.input("enter");
+        } else if (e.key === "Backspace") {
+          e.preventDefault();
+          gv.controller.input("back");
+        } else if (/^[a-zA-Z]$/.test(e.key)) {
+          e.preventDefault();
+          gv.controller.input(e.key.toLowerCase());
+        }
       } else if (/^[a-zA-Z]$/.test(e.key)) {
+        // Other game types (e.g. hangman) only take single-letter input — no enter/backspace.
         e.preventDefault();
-        Wordle.input(e.key.toLowerCase());
+        gv.controller.input(e.key.toLowerCase());
       }
     });
   }
@@ -501,6 +677,7 @@
   wireNameEntry();
   wireLobby();
   wireGame();
+  wireHangmanGame();
   wireActivity();
   wireNet();
   wireKeyboard();

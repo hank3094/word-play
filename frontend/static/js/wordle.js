@@ -331,7 +331,7 @@ const Wordle = (() => {
     renderFeed();
     renderShareControls();
     if (els.delete) els.delete.hidden = !(snap.owner && snap.owner === myId);
-    Keyboard.setHints(board().keyboard);
+    els.keyboard.setHints(board().keyboard);
   }
 
   return {

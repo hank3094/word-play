@@ -258,13 +258,15 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
             reason = next(
                 (e.get("reason") for e in res["events"] if e.get("kind") == "invalid"), "invalid"
             )
-            word = str(data.get("word", "")).lower().strip()
+            # "word" for a Wordle guess, "letter" for a hangman one — kept under one field name
+            # ("word") so activity.js needs no extra branching to display the rejected token.
+            token = str(data.get("word") or data.get("letter") or "").lower().strip()
             await self._broadcast_activity(
                 {
                     "kind": "rejected",
                     "gameId": gid,
                     "name": self.name,
-                    "word": word,
+                    "word": token,
                     "reason": reason,
                     "color": self.color,
                 }
@@ -279,37 +281,52 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
                 await self._broadcast_game(gid)
             return
 
-        # Build activity events from the game-type events returned by apply_action.
+        # Build activity events from the game-type events returned by apply_action. "guess" is
+        # Wordle's shape (word + per-letter marks); other game types (e.g. hangman's routine
+        # "letter_guess") use a different kind on purpose so they don't hit this branch — see
+        # docs/adding-a-game.md. "win"/"lose"/"revealed" are reused across game types, so they're
+        # built from their own event (via .get(), not direct indexing) rather than nested inside
+        # the Wordle-specific "guess" check.
         evs = res["events"]
         guess_ev = next((e for e in evs if e.get("kind") == "guess"), None)
         win_ev = next((e for e in evs if e.get("kind") == "win"), None)
         lose_ev = next((e for e in evs if e.get("kind") == "lose"), None)
-        if guess_ev:
-            if win_ev:
-                await self._broadcast_activity(
-                    {
-                        "kind": "game_won",
-                        "gameId": gid,
-                        "name": self.name,
-                        "word": guess_ev["word"],
-                        "marks": guess_ev["marks"],
-                        "color": self.color,
-                    }
-                )
-            else:
-                await self._broadcast_activity(
-                    {
-                        "kind": "guess",
-                        "gameId": gid,
-                        "name": self.name,
-                        "word": guess_ev["word"],
-                        "marks": guess_ev["marks"],
-                        "color": self.color,
-                    }
-                )
+        revealed_ev = next((e for e in evs if e.get("kind") == "revealed"), None)
+        if win_ev:
+            payload = {
+                "kind": "game_won",
+                "gameId": gid,
+                "name": self.name,
+                "word": win_ev.get("word", ""),
+                "color": self.color,
+            }
+            if guess_ev:  # only Wordle's guess co-occurs with win and carries marks
+                payload["marks"] = guess_ev.get("marks")
+            await self._broadcast_activity(payload)
+        elif guess_ev:
+            await self._broadcast_activity(
+                {
+                    "kind": "guess",
+                    "gameId": gid,
+                    "name": self.name,
+                    "word": guess_ev.get("word", ""),
+                    "marks": guess_ev.get("marks"),
+                    "color": self.color,
+                }
+            )
         if lose_ev:
             await self._broadcast_activity(
-                {"kind": "game_lost", "gameId": gid, "answer": lose_ev["answer"]}
+                {"kind": "game_lost", "gameId": gid, "answer": lose_ev.get("answer", "")}
+            )
+        if revealed_ev:
+            await self._broadcast_activity(
+                {
+                    "kind": "game_revealed",
+                    "gameId": gid,
+                    "name": self.name,
+                    "word": revealed_ev.get("word", ""),
+                    "color": self.color,
+                }
             )
         await self._broadcast_game(gid)
         if res["finished"]:

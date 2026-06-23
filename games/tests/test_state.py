@@ -58,6 +58,20 @@ async def test_create_unknown_game_type_returns_none():
     assert await state.create_game("chess", "p1", "ANA") is None
 
 
+async def test_list_games_omits_word_length_for_hangman():
+    gid = await state.create_game("hangman", "p1", "ANA")
+    games = await state.list_games()
+    assert games[0]["id"] == gid
+    assert games[0]["gameType"] == "hangman"
+    assert games[0]["wordLength"] is None  # not 5 — hangman has no word_length state field
+
+
+async def test_list_games_still_reports_word_length_for_wordle(fixed_answer):
+    await state.create_game("wordle", "p1", "ANA")
+    games = await state.list_games()
+    assert games[0]["wordLength"] == 5
+
+
 async def test_join_and_leave_game(fixed_answer):
     gid = await state.create_game("wordle", "p1", "ANA")
     snap = await state.join_game("p2", gid, "BOB")

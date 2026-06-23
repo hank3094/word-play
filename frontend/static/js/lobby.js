@@ -45,7 +45,9 @@ const Lobby = (() => {
     for (const g of games) {
       const li = document.createElement("li");
       li.className = "game-row";
-      const label = `${g.gameType.toUpperCase()} (${g.wordLength || 5})`;
+      const label = g.wordLength
+        ? `${g.gameType.toUpperCase()} (${g.wordLength})`
+        : g.gameType.toUpperCase();
       const who = g.players.length ? g.players.join(", ") : "empty";
       const statusBadge =
         g.status === "playing"

@@ -30,3 +30,14 @@ def allowed(word_length: int = 5) -> frozenset[str]:
     specific = f"allowed_{word_length}.txt"
     name = specific if (_WORDS_DIR / specific).exists() else "allowed.txt"
     return _load(name) | frozenset(answers(word_length))
+
+
+@cache
+def hangman_words(difficulty: str = "medium") -> tuple[str, ...]:
+    """Hangman's secret-word pool for the given difficulty tier, as a sorted tuple.
+
+    Unlike Wordle's per-length pools, these aren't bounded to 4-7 letters — hangman words can be
+    much longer (see scripts/compute_hangman_difficulty.py). No "allowed guesses" counterpart
+    exists since hangman guesses are single letters, not whole words.
+    """
+    return tuple(sorted(_load(f"hangman_{difficulty}.txt")))

@@ -445,6 +445,9 @@ body {
   padding: 6px 4px;
   flex-wrap: wrap;
 }
+.word-length-row[hidden] {
+  display: none;
+}
 .word-length-options {
   display: flex;
   gap: 4px;
@@ -630,6 +633,74 @@ body {
 }
 .feed .reject {
   color: var(--danger);
+}
+
+/* ===== hangman game ===== */
+.hangman-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 0;
+  padding: 6px 0;
+}
+.hangman-figure {
+  height: min(40vh, 220px);
+  width: auto;
+  max-width: 90%;
+}
+.hm-part {
+  fill: none;
+  stroke: var(--fg-dim);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* Each part starts fully "undrawn": hangman.js measures its own length once and sets
+     --dash-len (a custom property, not the longhand directly, so this rule can still win over
+     it via .is-drawn — an inline *property* value would otherwise always beat a stylesheet rule
+     regardless of specificity). Adding .is-drawn animates the offset to 0, a pencil-stroke
+     draw-in. Duration is set per-element (proportional to stroke length, also via hangman.js) so
+     longer strokes take a touch longer to "draw" than short ones. */
+  stroke-dashoffset: var(--dash-len, 0);
+  transition: stroke-dashoffset ease-in-out;
+}
+.hm-part.hm-base,
+.hm-part.hm-pole,
+.hm-part.hm-beam,
+.hm-part.hm-rope {
+  stroke: var(--fg);
+}
+.hm-part.hm-head,
+.hm-part.hm-torso,
+.hm-part.hm-arm-l,
+.hm-part.hm-arm-r,
+.hm-part.hm-leg-l,
+.hm-part.hm-leg-r {
+  stroke: var(--danger);
+}
+/* Per-part transition-delay for same-stage pairs (so e.g. both arms draw as two separate
+   sequential strokes, not simultaneously) is computed in hangman.js's setUpStrokeLengths(),
+   since it depends on each part's own draw duration. */
+.hm-part.is-drawn {
+  stroke-dashoffset: 0;
+}
+.hangman-word {
+  font-size: clamp(20px, 6vw, 30px);
+  font-weight: bold;
+  letter-spacing: 4px;
+  text-align: center;
+  word-break: break-all;
+}
+.hangman-reveal-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 4px 0;
+  color: var(--fg-dim);
+  font-size: 14px;
 }
 
 /* ===== on-screen keyboard ===== */

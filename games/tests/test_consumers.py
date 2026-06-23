@@ -10,7 +10,7 @@ from channels.testing import WebsocketCommunicator
 
 from games import redis_client, state
 from games.consumers import PlayConsumer
-from games.gametypes import wordle
+from games.gametypes import hangman, wordle
 from games.models import FinishedGame
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -28,6 +28,12 @@ async def _clean():
 def fixed_answer(monkeypatch):
     monkeypatch.setattr(wordle, "pick_word", lambda word_length=5: "crane")
     return "crane"
+
+
+@pytest.fixture
+def fixed_hangman_word(monkeypatch):
+    monkeypatch.setattr(hangman, "pick_word", lambda difficulty="medium": "cat")
+    return "cat"
 
 
 async def _connect(name, cid=None):
@@ -161,6 +167,74 @@ async def test_rejected_guess_only_notifies_sender(fixed_answer):
         )
         rejected = await _recv_until(a, "rejected")
         assert rejected["reason"] == "unknown"
+    finally:
+        await a.disconnect()
+
+
+async def test_hangman_win_without_guess_event_does_not_crash(fixed_hangman_word):
+    # Hangman's routine event kind is "letter_guess", not "guess" — so a hangman win has a
+    # win_ev with no co-occurring guess_ev, the exact case the old consumers.py code (direct
+    # `guess_ev["word"]` indexing nested inside `if guess_ev:`) would have crashed on.
+    a = await _connect("ANA")
+    try:
+        await a.send_json_to({"type": "create_game", "gameType": "hangman"})
+        game = await _recv_until(a, "game")
+        gid = game["snapshot"]["id"]
+        assert game["snapshot"]["gameType"] == "hangman"
+
+        for letter in "ca":
+            await a.send_json_to(
+                {
+                    "type": "game_action",
+                    "gameId": gid,
+                    "action": "guess_letter",
+                    "data": {"letter": letter},
+                }
+            )
+            await _recv_until(a, "game")
+
+        # The final letter wins. The activity broadcast happens before the game-snapshot one.
+        await a.send_json_to(
+            {
+                "type": "game_action",
+                "gameId": gid,
+                "action": "guess_letter",
+                "data": {"letter": "t"},
+            }
+        )
+        activity = await _recv_until(a, "activity_event")
+        assert activity["event"]["kind"] == "game_won"
+        assert activity["event"]["word"] == "cat"
+        assert activity["event"].get("marks") is None  # no Wordle-style marks for hangman
+
+        won = await _recv_until(a, "game")
+        assert won["snapshot"]["status"] == "won"
+        assert won["snapshot"]["board"]["word"] == "cat"
+    finally:
+        await a.disconnect()
+
+
+async def test_hangman_letter_guess_skips_global_activity_but_lands_in_feed(fixed_hangman_word):
+    a = await _connect("ANA")
+    try:
+        await a.send_json_to({"type": "create_game", "gameType": "hangman"})
+        game = await _recv_until(a, "game")
+        gid = game["snapshot"]["id"]
+
+        await a.send_json_to(
+            {
+                "type": "game_action",
+                "gameId": gid,
+                "action": "guess_letter",
+                "data": {"letter": "z"},
+            }
+        )
+        snap = await _recv_until(a, "game")
+        assert snap["snapshot"]["board"]["wrongCount"] == 1
+        assert snap["snapshot"]["feed"][-1]["kind"] == "letter_guess"
+
+        # A routine (non-winning) letter guess shouldn't also produce a global activity event.
+        assert await a.receive_nothing(timeout=0.3)
     finally:
         await a.disconnect()
 

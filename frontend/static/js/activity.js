@@ -208,16 +208,23 @@ const Activity = (() => {
     }
   }
 
+  const GAME_LABELS = { wordle: "Wordle", hangman: "Hangman" };
+
   function fmtEvent(ev) {
     const ts = fmtTime(ev.ts);
     const n = esc(ev.name || "?");
     const w = esc((ev.word || "").toUpperCase());
     const a = esc((ev.answer || "").toUpperCase());
     const dot = colorDot(ev.color);
+    // Wordle's guess/win events carry per-letter marks; other game types (e.g. hangman) don't —
+    // omit the emoji-squares suffix entirely rather than a dangling space.
+    const markSuffix = ev.marks ? ` ${marks(ev.marks)}` : "";
     let body;
     switch (ev.kind) {
       case "game_created":
-        body = `${dot}<b>${n}</b> started a Wordle`;
+        body = `${dot}<b>${n}</b> started a ${
+          GAME_LABELS[ev.gameType] || "game"
+        }`;
         break;
       case "player_updated": {
         const oldN = ev.oldName ? esc(ev.oldName) : n;
@@ -226,13 +233,16 @@ const Activity = (() => {
         break;
       }
       case "guess":
-        body = `${dot}<b>${n}</b>: ${w} ${marks(ev.marks)}`;
+        body = `${dot}<b>${n}</b>: ${w}${markSuffix}`;
         break;
       case "game_won":
-        body = `${dot}<b>${n}</b> solved it — ${w} ${marks(ev.marks)}`;
+        body = `${dot}<b>${n}</b> solved it — ${w}${markSuffix}`;
         break;
       case "game_lost":
         body = `game over — the word was <b>${a}</b>`;
+        break;
+      case "game_revealed":
+        body = `${dot}<b>${n}</b> revealed the word — ${w}`;
         break;
       case "rejected":
         body = `${dot}<b>${n}</b>: ${w} — ${esc(rejectReason(ev.reason))}`;
@@ -272,6 +282,9 @@ const Activity = (() => {
   function rejectReason(r) {
     if (r === "length") return "wrong length";
     if (r === "finished") return "game is over";
+    if (r === "already_guessed") return "already guessed";
+    if (r === "invalid_letter") return "not a valid letter";
+    if (r === "not_lost") return "can't reveal yet";
     return "not in word list";
   }
 
