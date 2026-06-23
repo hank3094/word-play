@@ -396,6 +396,21 @@ body {
   }
 }
 
+@media (max-width: 400px) {
+  .radio-row.inline {
+    font-size: 14px;
+    gap: 6px;
+    padding: 4px 4px;
+  }
+  .radio-row.inline input {
+    width: 16px;
+    height: 16px;
+  }
+  .word-length-options {
+    gap: 2px 8px;
+  }
+}
+
 /* ===== new game modal ===== */
 .modal {
   position: absolute;
@@ -450,6 +465,7 @@ body {
 }
 .word-length-options {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
 }
 .custom-word {

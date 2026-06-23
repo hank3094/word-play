@@ -214,7 +214,7 @@ async def test_hangman_win_without_guess_event_does_not_crash(fixed_hangman_word
         await a.disconnect()
 
 
-async def test_hangman_letter_guess_skips_global_activity_but_lands_in_feed(fixed_hangman_word):
+async def test_hangman_letter_guess_lands_in_feed_and_global_activity(fixed_hangman_word):
     a = await _connect("ANA")
     try:
         await a.send_json_to({"type": "create_game", "gameType": "hangman"})
@@ -229,12 +229,15 @@ async def test_hangman_letter_guess_skips_global_activity_but_lands_in_feed(fixe
                 "data": {"letter": "z"},
             }
         )
+        # The activity broadcast happens before the game-snapshot one (same ordering as Wordle).
+        activity = await _recv_until(a, "activity_event")
+        assert activity["event"]["kind"] == "letter_guess"
+        assert activity["event"]["letter"] == "z"
+        assert activity["event"]["correct"] is False
+
         snap = await _recv_until(a, "game")
         assert snap["snapshot"]["board"]["wrongCount"] == 1
         assert snap["snapshot"]["feed"][-1]["kind"] == "letter_guess"
-
-        # A routine (non-winning) letter guess shouldn't also produce a global activity event.
-        assert await a.receive_nothing(timeout=0.3)
     finally:
         await a.disconnect()
 

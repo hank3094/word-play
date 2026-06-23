@@ -282,13 +282,13 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
             return
 
         # Build activity events from the game-type events returned by apply_action. "guess" is
-        # Wordle's shape (word + per-letter marks); other game types (e.g. hangman's routine
-        # "letter_guess") use a different kind on purpose so they don't hit this branch — see
-        # docs/adding-a-game.md. "win"/"lose"/"revealed" are reused across game types, so they're
-        # built from their own event (via .get(), not direct indexing) rather than nested inside
-        # the Wordle-specific "guess" check.
+        # Wordle's shape (word + per-letter marks); hangman's routine guess is "letter_guess"
+        # (letter + correct) — a different kind on purpose, so each is logged with its own shape.
+        # "win"/"lose"/"revealed" are reused across game types, so they're built from their own
+        # event (via .get(), not direct indexing) rather than nested inside either guess check.
         evs = res["events"]
         guess_ev = next((e for e in evs if e.get("kind") == "guess"), None)
+        letter_ev = next((e for e in evs if e.get("kind") == "letter_guess"), None)
         win_ev = next((e for e in evs if e.get("kind") == "win"), None)
         lose_ev = next((e for e in evs if e.get("kind") == "lose"), None)
         revealed_ev = next((e for e in evs if e.get("kind") == "revealed"), None)
@@ -302,6 +302,8 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
             }
             if guess_ev:  # only Wordle's guess co-occurs with win and carries marks
                 payload["marks"] = guess_ev.get("marks")
+            elif letter_ev:  # hangman's winning letter
+                payload["letter"] = letter_ev.get("letter", "")
             await self._broadcast_activity(payload)
         elif guess_ev:
             await self._broadcast_activity(
@@ -311,6 +313,17 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
                     "name": self.name,
                     "word": guess_ev.get("word", ""),
                     "marks": guess_ev.get("marks"),
+                    "color": self.color,
+                }
+            )
+        elif letter_ev:
+            await self._broadcast_activity(
+                {
+                    "kind": "letter_guess",
+                    "gameId": gid,
+                    "name": self.name,
+                    "letter": letter_ev.get("letter", ""),
+                    "correct": letter_ev.get("correct", False),
                     "color": self.color,
                 }
             )

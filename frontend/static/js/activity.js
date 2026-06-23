@@ -235,6 +235,11 @@ const Activity = (() => {
       case "guess":
         body = `${dot}<b>${n}</b>: ${w}${markSuffix}`;
         break;
+      case "letter_guess": {
+        const letter = esc((ev.letter || "").toUpperCase());
+        body = `${dot}<b>${n}</b>: ${letter} ${ev.correct ? "✅" : "❌"}`;
+        break;
+      }
       case "game_won":
         body = `${dot}<b>${n}</b> solved it — ${w}${markSuffix}`;
         break;
