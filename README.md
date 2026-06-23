@@ -27,12 +27,17 @@ Compose**; tested with **pytest** and **Playwright**.
   (masked by default, with a reveal toggle) and must be a real five-letter word.
 - **Multiple games at once** — create as many games as you like; they all appear in the lobby for
   anyone to open and join.
+- **Cooperative Hangman** — guess a shared secret word one letter at a time. Random words are
+  picked by difficulty (easy/medium/hard/nightmare — a hangman-solver simulation, not just raw word
+  frequency; see [docs/hangman-difficulty.md](docs/hangman-difficulty.md)), or choose your own word
+  (any length, not just five letters). Running out of guesses doesn't end the game — keep guessing,
+  or any player can reveal the word.
 
 ## Games roadmap
 
-Wordle is implemented. The backend (a game-type registry + a generic `game_action` protocol) and the
-frontend leave room for more cooperative games — **word search**, **crosswords**, **bananagrams** —
-without touching the lobby, presence, feed, or transport. See
+Wordle and Hangman are implemented. The backend (a game-type registry + a generic `game_action`
+protocol) and the frontend leave room for more cooperative games — **word search**, **crosswords**,
+**bananagrams** — without touching the lobby, presence, feed, or transport. See
 [docs/adding-a-game.md](docs/adding-a-game.md).
 
 Features to add:
@@ -41,9 +46,6 @@ Features to add:
 
 Games to implement:
 * secret wordle (it only tells you how many are correct and how many are in the correct position)
-* hangman
-	* Allow option to keep on going if you want
-	* Draw the hangman (animated?)
 * word search (bananagrams style?)
 * classic bananagrams
 	* will need to be able to view game history, with some diff algorithm so that changes are minimised

@@ -2,15 +2,15 @@
 """Score every hangman candidate word by how hard it is to guess letter-by-letter, then bin
 words into easy/medium/hard/nightmare by that score (replacing the old frequency-only tiers).
 
-Difficulty is measured by simulating a standard frequency-based hangman solver against each word
-(see the "chosen metric" section of the design doc / commit message for precedent and
-alternatives): at each step the solver guesses whichever unguessed letter is present in the
-largest fraction `p` of words still consistent with what's been revealed/ruled out so far. The
-cost of that guess is -log2(p) if the letter turns out to be present, or -log2(1-p) if absent
-("surprisal" / cross-entropy) -- a wrong guess the solver was confident about costs a lot; a word
-solved via a few confident, correct guesses costs almost nothing. The sum of these costs across
-every step (no 6-guess cap -- this measures the word's inherent difficulty, independent of the
-live game's guess limit) is the word's difficulty_score.
+Full methodology -- the solver, why the score is "surprisal"/cross-entropy rather than entropy
+itself, the precedent/alternatives considered, the corpus, and exactly how the commonness floors
+per bin were chosen -- is written up in docs/hangman-difficulty.md. Short version: at each step
+the solver guesses whichever unguessed letter is present in the largest fraction `p` of words
+still consistent with what's been revealed/ruled out so far. The cost of that guess is -log2(p) if
+the letter turns out to be present, or -log2(1-p) if absent, summed across every step (no 6-guess
+cap -- this measures the word's inherent difficulty, independent of the live game's guess limit)
+to get the word's difficulty_score. Bins are then gated by a one-sided commonness floor per tier
+(see COMMONNESS_FLOOR below) so e.g. "easy" can't contain a word nobody's ever heard of.
 
 Also records "commonness" (wordfreq's English zipf frequency, the same metric the old tiers used)
 so both can be compared/saved together.
