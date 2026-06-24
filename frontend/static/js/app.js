@@ -594,6 +594,8 @@
       status: document.getElementById("wordladder-status"),
       delete: document.getElementById("wordladder-delete"),
       shareToggleBtn: document.getElementById("wordladder-share-toggle-btn"),
+      solutionBtn: document.getElementById("wordladder-solution-btn"),
+      solutionRow: document.getElementById("wordladder-solution"),
       keyboard,
     });
     wireGameLinkButton("wordladder-link-btn");

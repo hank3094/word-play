@@ -15,7 +15,8 @@ becomes the one frozen, canonical result everyone sees from then on. State shape
      "word_length": 4, "edit_mode": "substitute", "difficulty": "medium",
      "par_steps": 3, "max_rows": 13, "status": "playing",
      "boards": {"p1": {"entries": ["cold", "cord", "card", "ward"]}},
-     "winner_pid": None}
+     "winner_pid": None, "solution": ["cold", "cord", "card", "warm"],
+     "solution_revealed": False}
 
 A player's board is created lazily on their first action (so players who never touch a row don't
 need an entry at all). ``entries`` is that player's own list of rows, index 0 always equal to
@@ -285,6 +286,8 @@ def create_state(options: dict | None = None) -> dict:
         "boards": {},
         "winner_pid": None,
         "status": PLAYING,
+        "solution": path,
+        "solution_revealed": False,
     }
 
 
@@ -295,15 +298,22 @@ def is_finished(state: dict) -> bool:
 def handle_action(state: dict, pid: str, name: str, action: str, data: dict):
     """Apply a player's action. Returns ``(new_state, events)``.
 
-    The only action is ``set_word`` with ``data = {"index": int, "word": str}``, always applied
-    to *the acting player's own board* (see module docstring) -- it never touches anyone else's.
-    Any row may be set directly -- a player isn't required to fill rows in order, so setting an
-    index past their board's current end pads the gap with blank rows (trimmed back off the end
+    ``reveal_solution`` (no data) flips a one-way flag exposing the generator's BFS-solved path
+    (see ``generate_puzzle``) to everyone via ``snapshot``; it's always allowed, even after the
+    game is won, since peeking at the route doesn't affect anyone's board.
+
+    Otherwise the only action is ``set_word`` with ``data = {"index": int, "word": str}``, always
+    applied to *the acting player's own board* (see module docstring) -- it never touches anyone
+    else's. Any row may be set directly -- a player isn't required to fill rows in order, so setting
+    an index past their board's current end pads the gap with blank rows (trimmed back off the end
     once they're empty again). Unlike Wordle/Hangman, a word that isn't real or isn't a valid
     edit is **not** rejected -- it's stored as-is and flagged invalid in ``snapshot``, so the only
     protocol-level ``invalid`` reasons are structural: the game is already finished, or the index
     is outside ``1..max_rows-1`` (row 0 is the fixed start word, never editable).
     """
+    if action == "reveal_solution":
+        new_state = {**state, "solution_revealed": True}
+        return new_state, [{"kind": "solution_revealed", "name": name}]
     if is_finished(state):
         return state, [{"kind": "invalid", "reason": "finished"}]
     if action != "set_word":
@@ -402,6 +412,7 @@ def snapshot(state: dict) -> dict:
         "status": state["status"],
         "winnerPid": winner_pid,
         "boards": {pid: _row_view(entries, edit_mode) for pid, entries in boards.items()},
+        "solution": state["solution"] if state["solution_revealed"] else None,
     }
 
 

@@ -32,6 +32,15 @@ const WordLadder = (() => {
         Net.send(iAmSharing() ? "share_stop" : "share_start", { gameId: gid });
       });
     }
+    if (els.solutionBtn) {
+      els.solutionBtn.addEventListener("click", () => {
+        Net.send("game_action", {
+          gameId: gid,
+          action: "reveal_solution",
+          data: {},
+        });
+      });
+    }
   }
 
   function setMyId(id) {
@@ -439,6 +448,20 @@ const WordLadder = (() => {
     els.feed.innerHTML = last ? `<div>${fmtFeed(last)}</div>` : "";
   }
 
+  function renderSolution() {
+    const b = board();
+    if (els.solutionBtn) els.solutionBtn.hidden = !b || !!b.solution;
+    if (!els.solutionRow) return;
+    if (b && b.solution) {
+      els.solutionRow.textContent = b.solution
+        .map((w) => w.toUpperCase())
+        .join(" → ");
+      els.solutionRow.hidden = false;
+    } else {
+      els.solutionRow.hidden = true;
+    }
+  }
+
   function renderShareControls() {
     if (!els.shareToggleBtn) return;
     const playing = isPlaying();
@@ -457,6 +480,7 @@ const WordLadder = (() => {
     renderStatus();
     renderFeed();
     renderShareControls();
+    renderSolution();
     if (els.delete) els.delete.hidden = !(snap.owner && snap.owner === myId);
   }
 

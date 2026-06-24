@@ -25,6 +25,8 @@ def _state(
         "boards": boards,
         "winner_pid": winner_pid,
         "status": status,
+        "solution": [start, end],
+        "solution_revealed": False,
     }
 
 
@@ -112,6 +114,23 @@ def test_create_state_defaults():
     assert len(state["start_word"]) == state["word_length"]
     assert len(state["end_word"]) == state["word_length"]
     assert state["max_rows"] == state["par_steps"] + 10
+
+
+def test_create_state_keeps_the_generated_solution():
+    state = wordladder.create_state({"wordLength": 4})
+    solution = state["solution"]
+    assert solution[0] == state["start_word"]
+    assert solution[-1] == state["end_word"]
+    assert state["solution_revealed"] is False
+    assert wordladder.snapshot(state)["solution"] is None  # hidden until revealed
+
+
+def test_reveal_solution_exposes_it_in_snapshot():
+    state = wordladder.create_state({"wordLength": 4})
+    new_state, events = wordladder.handle_action(state, "p1", "ANA", "reveal_solution", {})
+    assert new_state["solution_revealed"] is True
+    assert events == [{"kind": "solution_revealed", "name": "ANA"}]
+    assert wordladder.snapshot(new_state)["solution"] == state["solution"]
 
 
 def test_first_action_creates_a_board_for_that_player_only():

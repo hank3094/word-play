@@ -737,6 +737,13 @@ body {
 .ladder-info b {
   color: var(--fg);
 }
+.ladder-solution {
+  text-align: center;
+  color: var(--fg-dim);
+  font-size: 13px;
+  padding: 2px 0;
+  letter-spacing: 1px;
+}
 .ladder-wrap {
   flex: 1;
   display: flex;
