@@ -10,7 +10,7 @@ from channels.testing import WebsocketCommunicator
 
 from games import redis_client, state
 from games.consumers import PlayConsumer
-from games.gametypes import hangman, wordle
+from games.gametypes import hangman, wordladder, wordle
 from games.models import FinishedGame
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -34,6 +34,15 @@ def fixed_answer(monkeypatch):
 def fixed_hangman_word(monkeypatch):
     monkeypatch.setattr(hangman, "pick_word", lambda difficulty="medium": "cat")
     return "cat"
+
+
+@pytest.fixture
+def fixed_ladder_puzzle(monkeypatch):
+    path = ["cold", "cord"]
+    monkeypatch.setattr(
+        wordladder, "generate_puzzle", lambda word_length, steps, difficulty, edit_mode: path
+    )
+    return path
 
 
 async def _connect(name, cid=None):
@@ -309,6 +318,38 @@ async def test_same_client_id_is_one_player_and_survives_one_drop():
     finally:
         await a2.disconnect()
         await b.disconnect()
+
+
+async def test_wordladder_set_word_grows_board_and_wins(fixed_ladder_puzzle):
+    a = await _connect("ANA")
+    try:
+        welcome = await _recv_until(a, "welcome")
+        my_id = welcome["id"]
+
+        await a.send_json_to({"type": "create_game", "gameType": "wordladder"})
+        game = await _recv_until(a, "game")
+        gid = game["snapshot"]["id"]
+        assert game["snapshot"]["gameType"] == "wordladder"
+        assert game["snapshot"]["board"]["boards"] == {}  # nobody's acted yet
+
+        await a.send_json_to(
+            {
+                "type": "game_action",
+                "gameId": gid,
+                "action": "set_word",
+                "data": {"index": 1, "word": "cord"},
+            }
+        )
+        activity = await _recv_until(a, "activity_event")
+        assert activity["event"]["kind"] == "game_won"
+        assert activity["event"]["word"] == "cord"
+
+        won = await _recv_until(a, "game")
+        assert won["snapshot"]["status"] == "won"
+        my_rows = won["snapshot"]["board"]["boards"][my_id]
+        assert [r["word"] for r in my_rows] == ["cold", "cord"]
+    finally:
+        await a.disconnect()
 
 
 async def test_disconnect_removes_from_lobby():

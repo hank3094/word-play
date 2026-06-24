@@ -10,16 +10,20 @@ const Board = (() => {
   }
 
   // rows: [{word, marks}]. The active row shows the live letters:
-  //   current    — your own letters, drawn solid on top.
-  //   showCursor — whether to show the next-cell cursor (true only when it's your own typing).
+  //   current    — your own letters, drawn solid on top. May contain spaces (boxes skipped over
+  //                via left/right and not yet typed into) -- those render blank, not as letters.
+  //   showCursor — whether to show the cursor box (true only when it's your own typing).
+  //   cursorPos  — which box (0..wordLength) the cursor sits on.
   //   ghosts     — [{text, color}] from other sharers, overlaid beneath at low opacity.
   function render({
     rows = [],
     current = "",
     showCursor = true,
+    cursorPos = 0,
     wordLength = 5,
     maxGuesses = 6,
     ghosts = null,
+    onTileClick = null,
   } = {}) {
     cols = wordLength;
     maxRows = maxGuesses;
@@ -56,12 +60,17 @@ const Board = (() => {
             }
           }
           const ch = current[c];
-          if (ch) {
+          if (ch && ch !== " ") {
             // A text node keeps the solid letter on top of any ghost spans.
             tile.appendChild(document.createTextNode(ch));
             tile.classList.add("filled");
-          } else if (showCursor && c === current.length) {
-            tile.classList.add("cursor"); // next cell to fill
+          }
+          if (showCursor && c === cursorPos) {
+            tile.classList.add("cursor");
+          }
+          if (showCursor && onTileClick) {
+            tile.classList.add("clickable");
+            tile.addEventListener("click", () => onTileClick(c));
           }
         }
         rowEl.appendChild(tile);

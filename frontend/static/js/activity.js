@@ -208,7 +208,11 @@ const Activity = (() => {
     }
   }
 
-  const GAME_LABELS = { wordle: "Wordle", hangman: "Hangman" };
+  const GAME_LABELS = {
+    wordle: "Wordle",
+    hangman: "Hangman",
+    wordladder: "Word Ladder",
+  };
 
   function fmtEvent(ev) {
     const ts = fmtTime(ev.ts);
@@ -240,6 +244,9 @@ const Activity = (() => {
         body = `${dot}<b>${n}</b>: ${letter} ${ev.correct ? "✅" : "❌"}`;
         break;
       }
+      case "ladder_step":
+        body = `${dot}<b>${n}</b>: ${w} (row ${(ev.index || 0) + 1})`;
+        break;
       case "game_won":
         body = `${dot}<b>${n}</b> solved it — ${w}${markSuffix}`;
         break;

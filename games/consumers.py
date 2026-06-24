@@ -241,15 +241,16 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         action = str(content.get("action", ""))
         data = content.get("data") or {}
 
-        # Live typing bypasses Redis: relay it straight to the rest of the game group.
+        # Live typing bypasses Redis: relay it straight to the rest of the game group. `index` is
+        # word ladder's row number (any row can be active, unlike Wordle's single fixed one) --
+        # harmlessly absent/None for game types that don't send it.
         if action == "typing":
             text = str(data.get("text", ""))[:8]
+            event = {"kind": "typing", "pid": self.pid, "name": self.name, "text": text}
+            if "index" in data:
+                event["index"] = data.get("index")
             await self.channel_layer.group_send(
-                game_group(gid),
-                {
-                    "type": "game.feed",
-                    "event": {"kind": "typing", "pid": self.pid, "name": self.name, "text": text},
-                },
+                game_group(gid), {"type": "game.feed", "event": event}
             )
             return
 
@@ -289,6 +290,7 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         evs = res["events"]
         guess_ev = next((e for e in evs if e.get("kind") == "guess"), None)
         letter_ev = next((e for e in evs if e.get("kind") == "letter_guess"), None)
+        ladder_ev = next((e for e in evs if e.get("kind") == "ladder_step"), None)
         win_ev = next((e for e in evs if e.get("kind") == "win"), None)
         lose_ev = next((e for e in evs if e.get("kind") == "lose"), None)
         revealed_ev = next((e for e in evs if e.get("kind") == "revealed"), None)
@@ -324,6 +326,17 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
                     "name": self.name,
                     "letter": letter_ev.get("letter", ""),
                     "correct": letter_ev.get("correct", False),
+                    "color": self.color,
+                }
+            )
+        elif ladder_ev:
+            await self._broadcast_activity(
+                {
+                    "kind": "ladder_step",
+                    "gameId": gid,
+                    "name": self.name,
+                    "word": ladder_ev.get("word", ""),
+                    "index": ladder_ev.get("index"),
                     "color": self.color,
                 }
             )

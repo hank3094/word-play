@@ -182,6 +182,48 @@
           <div id="hangman-keyboard" class="keyboard"></div>
         </section>
 
+        <!-- ===== WORD LADDER GAME ===== -->
+        <section id="wordladder-game" class="view">
+          <header class="game-head">
+            <button class="btn btn-back" data-nav="leave">← LOBBY</button>
+            <span id="wordladder-players" class="game-players"></span>
+            <span id="wordladder-status" class="game-status"></span>
+            <button
+              id="wordladder-delete"
+              class="btn btn-small btn-danger"
+              data-nav="delete"
+              hidden
+            >
+              ✕ DELETE
+            </button>
+            <button
+              id="wordladder-link-btn"
+              class="btn btn-small"
+              aria-label="copy link to this game"
+              title="copy link to this game"
+            >
+              🔗
+            </button>
+            <button class="btn btn-small activity-toggle-btn" aria-label="activity log">LOG</button>
+          </header>
+
+          <div class="game-controls">
+            <button id="wordladder-share-toggle-btn" class="btn btn-small share-toggle-btn" hidden>
+              📡 SHARING OFF
+            </button>
+          </div>
+
+          <div id="wordladder-info" class="ladder-info"></div>
+
+          <div class="ladder-wrap">
+            <div id="ladder-board" class="ladder-board"></div>
+          </div>
+
+          <div id="wordladder-feed" class="feed"></div>
+
+          <div id="wordladder-keyboard" class="keyboard"></div>
+        </section>
+
         <!-- ===== EDIT PROFILE MODAL ===== -->
         <div id="edit-profile-modal" class="modal" hidden>
           <div class="modal-card">
@@ -322,6 +364,50 @@
                 </div>
               </div>
 
+              <div id="wordladder-options" data-gametype-panel="wordladder" hidden>
+                <div class="word-length-row">
+                  <span class="radio-label">Word length</span>
+                  <div class="word-length-options">
+                    <label class="radio-row inline"><input type="radio" name="wordladder-length" value="3" /> 3</label>
+                    <label class="radio-row inline"><input type="radio" name="wordladder-length" value="4" /> 4</label>
+                    <label class="radio-row inline"><input type="radio" name="wordladder-length" value="5" checked /> 5</label>
+                    <label class="radio-row inline"><input type="radio" name="wordladder-length" value="6" /> 6</label>
+                    <label class="radio-row inline"><input type="radio" name="wordladder-length" value="7" /> 7</label>
+                    <label class="radio-row inline"><input type="radio" name="wordladder-length" value="8" /> 8</label>
+                  </div>
+                </div>
+
+                <div class="word-length-row">
+                  <span class="radio-label">Steps</span>
+                  <div class="word-length-options">
+                    <label class="radio-row inline"><input type="radio" name="wordladder-steps" value="2" /> 2</label>
+                    <label class="radio-row inline"><input type="radio" name="wordladder-steps" value="3" /> 3</label>
+                    <label class="radio-row inline"><input type="radio" name="wordladder-steps" value="4" /> 4</label>
+                    <label class="radio-row inline"><input type="radio" name="wordladder-steps" value="5" checked /> 5</label>
+                    <label class="radio-row inline"><input type="radio" name="wordladder-steps" value="7" /> 7</label>
+                    <label class="radio-row inline"><input type="radio" name="wordladder-steps" value="10" /> 10</label>
+                  </div>
+                </div>
+
+                <div class="word-length-row">
+                  <span class="radio-label">Difficulty</span>
+                  <div class="word-length-options">
+                    <label class="radio-row inline"><input type="radio" name="wordladder-difficulty" value="easy" /> Easy</label>
+                    <label class="radio-row inline"><input type="radio" name="wordladder-difficulty" value="medium" checked /> Medium</label>
+                    <label class="radio-row inline"><input type="radio" name="wordladder-difficulty" value="hard" /> Hard</label>
+                    <label class="radio-row inline"><input type="radio" name="wordladder-difficulty" value="nightmare" /> Nightmare</label>
+                  </div>
+                </div>
+
+                <div class="word-length-row">
+                  <span class="radio-label">Edit mode</span>
+                  <div class="word-length-options">
+                    <label class="radio-row inline"><input type="radio" name="wordladder-edit-mode" value="substitute" checked /> Substitute only</label>
+                    <label class="radio-row inline"><input type="radio" name="wordladder-edit-mode" value="insert_delete" /> Allow insert/delete</label>
+                  </div>
+                </div>
+              </div>
+
               <p id="new-game-error" class="error-text" hidden></p>
 
               <div class="modal-actions">
@@ -390,6 +476,8 @@
     <script src="{% static 'js/board.js' %}"></script>
     <script src="{% static 'js/wordle.js' %}"></script>
     <script src="{% static 'js/hangman.js' %}"></script>
+    <script src="{% static 'js/ladderboard.js' %}"></script>
+    <script src="{% static 'js/wordladder.js' %}"></script>
     <script src="{% static 'js/lobby.js' %}"></script>
     <script src="{% static 'js/activity.js' %}"></script>
     <script src="{% static 'js/app.js' %}"></script>

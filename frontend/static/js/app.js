@@ -26,6 +26,7 @@
   const GAME_VIEWS = {
     wordle: { viewId: "wordle-game", controller: Wordle },
     hangman: { viewId: "hangman-game", controller: Hangman },
+    wordladder: { viewId: "wordladder-game", controller: WordLadder },
   };
   let activeGameType = null; // which entry of GAME_VIEWS is currently open, if any
   function activeController() {
@@ -240,6 +241,30 @@
     };
   }
 
+  function selectedLadderLength(form) {
+    const radio = form.querySelector('input[name="wordladder-length"]:checked');
+    return radio ? parseInt(radio.value, 10) : 5;
+  }
+
+  function selectedLadderSteps(form) {
+    const radio = form.querySelector('input[name="wordladder-steps"]:checked');
+    return radio ? parseInt(radio.value, 10) : 5;
+  }
+
+  function selectedLadderDifficulty(form) {
+    const radio = form.querySelector(
+      'input[name="wordladder-difficulty"]:checked',
+    );
+    return radio ? radio.value : "medium";
+  }
+
+  function selectedLadderEditMode(form) {
+    const radio = form.querySelector(
+      'input[name="wordladder-edit-mode"]:checked',
+    );
+    return radio ? radio.value : "substitute";
+  }
+
   function selectedWordLength(form) {
     const radio = form.querySelector('input[name="word-length"]:checked');
     return radio ? parseInt(radio.value, 10) : 5;
@@ -415,6 +440,19 @@
         return;
       }
 
+      if (gameType === "wordladder") {
+        Net.send("create_game", {
+          gameType: "wordladder",
+          options: {
+            wordLength: selectedLadderLength(el.form),
+            steps: selectedLadderSteps(el.form),
+            difficulty: selectedLadderDifficulty(el.form),
+            editMode: selectedLadderEditMode(el.form),
+          },
+        });
+        return;
+      }
+
       const len = selectedWordLength(el.form);
       const custom =
         el.form.querySelector('input[name="word-mode"]:checked').value ===
@@ -541,6 +579,38 @@
     });
   }
 
+  // ---- word ladder game ----
+  function wireWordLadderGame() {
+    const keyboard = Keyboard.create(
+      document.getElementById("wordladder-keyboard"),
+      (key) => WordLadder.input(key),
+      { allowSpace: true },
+    );
+    WordLadder.init({
+      board: document.getElementById("ladder-board"),
+      info: document.getElementById("wordladder-info"),
+      feed: document.getElementById("wordladder-feed"),
+      players: document.getElementById("wordladder-players"),
+      status: document.getElementById("wordladder-status"),
+      delete: document.getElementById("wordladder-delete"),
+      shareToggleBtn: document.getElementById("wordladder-share-toggle-btn"),
+      keyboard,
+    });
+    wireGameLinkButton("wordladder-link-btn");
+
+    document
+      .getElementById("wordladder-game")
+      .addEventListener("click", (e) => {
+        if (e.target.closest('[data-nav="leave"]')) {
+          leaveCurrentGame();
+        } else if (e.target.closest('[data-nav="delete"]')) {
+          if (confirm("Delete this game for everyone?")) {
+            Net.send("delete_game", { gameId: WordLadder.currentGame() });
+          }
+        }
+      });
+  }
+
   // Shared by every game view's "← LOBBY" button.
   function leaveCurrentGame() {
     Net.send("leave_game");
@@ -587,6 +657,7 @@
       Lobby.setMyId(m.id);
       Wordle.setMyId(m.id);
       Hangman.setMyId(m.id);
+      WordLadder.setMyId(m.id);
       // If the socket dropped while we were in a game, rejoin it after reconnecting so the server
       // re-associates us (a fresh connection starts with no current game).
       const gv = activeGameType && GAME_VIEWS[activeGameType];
@@ -654,13 +725,30 @@
       const gv = activeGameType && GAME_VIEWS[activeGameType];
       if (!gv || !views[gv.viewId].classList.contains("is-active")) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (activeGameType === "wordle") {
+      const ARROW_KEYS = {
+        ArrowUp: "up",
+        ArrowDown: "down",
+        ArrowLeft: "left",
+        ArrowRight: "right",
+      };
+      if (activeGameType === "wordle" || activeGameType === "wordladder") {
         if (e.key === "Enter") {
           e.preventDefault();
           gv.controller.input("enter");
         } else if (e.key === "Backspace") {
           e.preventDefault();
           gv.controller.input("back");
+        } else if (activeGameType === "wordladder" && ARROW_KEYS[e.key]) {
+          // Word ladder also supports navigating between rows — Wordle has only the one active
+          // row, so up/down have nothing to do there (left/right move within it, below).
+          e.preventDefault();
+          gv.controller.input(ARROW_KEYS[e.key]);
+        } else if (
+          activeGameType === "wordle" &&
+          (e.key === "ArrowLeft" || e.key === "ArrowRight")
+        ) {
+          e.preventDefault();
+          gv.controller.input(ARROW_KEYS[e.key]);
         } else if (/^[a-zA-Z]$/.test(e.key)) {
           e.preventDefault();
           gv.controller.input(e.key.toLowerCase());
@@ -678,6 +766,7 @@
   wireLobby();
   wireGame();
   wireHangmanGame();
+  wireWordLadderGame();
   wireActivity();
   wireNet();
   wireKeyboard();

@@ -8,6 +8,8 @@ const Wordle = (() => {
   let gid = null;
   let snap = null;
   let buffer = "";
+  let cursorPos = 0; // caret position within buffer (0..wordLength) -- left/right move it, typing
+  // overwrites whichever box it's on (the row is a fixed length, so there's nowhere to insert)
   let pending = null; // a guess that's been submitted and is awaiting the server's response
   let rejectMsg = null; // why the last guess was rejected, shown until the next keystroke
   let prevRows = 0;
@@ -45,6 +47,7 @@ const Wordle = (() => {
   function open(gameId) {
     gid = gameId;
     buffer = "";
+    cursorPos = 0;
     pending = null;
     rejectMsg = null;
     prevRows = 0;
@@ -57,6 +60,7 @@ const Wordle = (() => {
     gid = null;
     snap = null;
     buffer = "";
+    cursorPos = 0;
     pending = null;
     rejectMsg = null;
     prevRows = 0;
@@ -78,6 +82,7 @@ const Wordle = (() => {
     if (s.board.rows.length !== prevRows) {
       // a guess landed (mine or someone else's) — the active row advanced
       buffer = "";
+      cursorPos = 0;
       pending = null;
       rejectMsg = null;
       typingPeers = {};
@@ -100,11 +105,14 @@ const Wordle = (() => {
     if (!isPlaying()) return;
     const len = board().wordLength;
     if (key === "enter") {
-      if (buffer.length === len) {
+      // Every box must hold a real letter -- no gaps left over from typing out of order via
+      // left/right -- before this counts as a guess.
+      if (buffer.length === len && !buffer.includes(" ")) {
         // Clear the buffer immediately so the next word's letters aren't dropped (and a rejected
         // word can't get stuck). Keep it visible as `pending` until the server replies.
         pending = buffer;
         buffer = "";
+        cursorPos = 0;
         // Identifies this exact submission so a forced retry (see sendGuess) replays the same
         // request rather than the server mistaking it for a fresh guess and double-counting it.
         pendingGuessRequestId =
@@ -117,12 +125,46 @@ const Wordle = (() => {
       }
       return;
     }
+    // No up/down -- a guess row is the only thing being edited, there's nothing to move between.
+    if (key === "left") {
+      cursorPos = Math.max(0, cursorPos - 1);
+      renderBoard();
+      return;
+    }
+    if (key === "right") {
+      cursorPos = Math.min(len, cursorPos + 1);
+      renderBoard();
+      return;
+    }
     pending = null; // composing a fresh guess
     rejectMsg = null; // clear any "not a word" note once they start retyping
     if (key === "back") {
-      buffer = buffer.slice(0, -1);
-    } else if (/^[a-z]$/.test(key) && buffer.length < len) {
-      buffer += key;
+      // Overwrite-in-place, not a shift: clearing a box leaves the others where they are. Pad
+      // with spaces first since the cursor may sit past the end of what's actually been typed
+      // (left/right lets you step ahead to any of the fixed boxes).
+      const padded = buffer.padEnd(len, " ");
+      // Clears whichever box the cursor is over -- the one under it if it's sitting on a real
+      // tile, otherwise (past the last box) the last real one -- then steps back, same as a
+      // normal backspace, so repeated presses walk back through the word clearing as they go.
+      const target = Math.min(cursorPos, len - 1);
+      buffer = (
+        padded.slice(0, target) +
+        " " +
+        padded.slice(target + 1)
+      ).replace(/ +$/, "");
+      cursorPos = Math.max(0, cursorPos - 1);
+    } else if (/^[a-z]$/.test(key)) {
+      // The row is exactly wordLength boxes -- typing overwrites whichever box the cursor sits
+      // on (there's nowhere for an inserted extra letter to go), capped at that length. Padded
+      // the same way as backspace, for the same reason.
+      if (cursorPos >= len) return;
+      const padded = buffer.padEnd(len, " ");
+      buffer = (
+        padded.slice(0, cursorPos) +
+        key +
+        padded.slice(cursorPos + 1)
+      ).replace(/ +$/, "");
+      cursorPos += 1;
     } else {
       return;
     }
@@ -222,9 +264,10 @@ const Wordle = (() => {
     const b = board();
     if (!b) return;
 
-    // Your own letters are always solid and on top; the cursor shows only while you type.
-    const current = buffer.length ? buffer : pending ? pending : "";
-    const showCursor = !!buffer.length;
+    // Your own letters are always solid and on top; the cursor shows only while composing (not
+    // while a submitted guess is sitting there awaiting the server's response).
+    const current = pending !== null ? pending : buffer;
+    const showCursor = pending === null;
     // You only see others' live typing while you're sharing yours too.
     let ghosts = null;
     if (iAmSharing()) {
@@ -242,9 +285,16 @@ const Wordle = (() => {
       rows: b.rows,
       current,
       showCursor,
+      cursorPos,
       ghosts,
       wordLength: b.wordLength,
       maxGuesses: b.maxGuesses,
+      onTileClick: showCursor
+        ? (c) => {
+            cursorPos = c;
+            renderBoard();
+          }
+        : null,
     });
   }
 

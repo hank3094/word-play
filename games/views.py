@@ -37,7 +37,7 @@ def history(request):
                     "won": r.won,
                     "guessesUsed": r.guesses_used,
                     "maxGuesses": (
-                        r.snapshot["board"]["maxGuesses"]
+                        r.snapshot["board"].get("maxGuesses", 6)
                         if r.snapshot and "board" in r.snapshot
                         else 6
                     ),

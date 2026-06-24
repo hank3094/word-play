@@ -8,9 +8,13 @@ const Keyboard = (() => {
     ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
     ["enter", "z", "x", "c", "v", "b", "n", "m", "back"],
   ];
-  const LABEL = { enter: "ENTER", back: "⌫" };
+  const LABEL = { enter: "ENTER", back: "⌫", space: "SPACE" };
 
   // opts.lettersOnly: omit the ENTER/⌫ keys (for a click-to-guess-immediately game like hangman).
+  // opts.allowSpace: add a dedicated full-width SPACE row -- only word-length-indeterminate ladder
+  // games need it (it inserts an empty placeholder box), and there's no physical-keyboard
+  // equivalent on mobile without an external keyboard, so it has to live somewhere on screen.
+  // Built once up front; toggle per-game applicability afterwards with setSpaceVisible.
   function create(el, cb, opts = {}) {
     const onKey = cb || (() => {});
     const keyEls = {};
@@ -35,6 +39,19 @@ const Keyboard = (() => {
       el.appendChild(rowEl);
     }
 
+    if (opts.allowSpace) {
+      const rowEl = document.createElement("div");
+      rowEl.className = "kb-row";
+      const btn = document.createElement("button");
+      btn.className = "kb-key wide-space";
+      btn.textContent = LABEL.space;
+      btn.dataset.key = "space";
+      btn.addEventListener("click", () => onKey("space"));
+      rowEl.appendChild(btn);
+      keyEls.space = btn;
+      el.appendChild(rowEl);
+    }
+
     // hints: { letter: "hit" | "present" | "miss" }
     function setHints(hints) {
       for (const [key, btn] of Object.entries(keyEls)) {
@@ -52,7 +69,13 @@ const Keyboard = (() => {
       }
     }
 
-    return { setHints, setDisabled };
+    // Hides the SPACE row for games/modes where inserting a placeholder makes no sense (e.g.
+    // substitute mode, or any non-ladder keyboard that never set opts.allowSpace).
+    function setSpaceVisible(visible) {
+      if (keyEls.space) keyEls.space.parentElement.hidden = !visible;
+    }
+
+    return { setHints, setDisabled, setSpaceVisible };
   }
 
   return { create };

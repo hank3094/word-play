@@ -5,6 +5,7 @@ otherwise falls back to the original ``answers.txt`` / ``allowed.txt`` (5-letter
 A guess is valid if it is in either set, so every answer is always a legal guess.
 """
 
+import json
 from functools import cache
 from pathlib import Path
 
@@ -13,7 +14,11 @@ _WORDS_DIR = Path(__file__).resolve().parent / "words"
 
 def _load(name: str) -> frozenset[str]:
     path = _WORDS_DIR / name
-    return frozenset(line.strip().lower() for line in path.read_text().splitlines() if line.strip())
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
+        return frozenset()  # e.g. a length/tier with no generated word list -- just no words
+    return frozenset(line.strip().lower() for line in text.splitlines() if line.strip())
 
 
 @cache
@@ -41,3 +46,34 @@ def hangman_words(difficulty: str = "medium") -> tuple[str, ...]:
     exists since hangman guesses are single letters, not whole words.
     """
     return tuple(sorted(_load(f"hangman_{difficulty}.txt")))
+
+
+LADDER_TIERS = ("easy", "medium", "hard", "nightmare")
+
+
+@cache
+def ladder_words(length: int, tier: str | None = None) -> frozenset[str]:
+    """Word Ladder's dictionary for a given length, either one commonality tier (see
+    scripts/compute_word_ladder_graph.py) or, with no tier, every word of that length --
+    the pool used for "is this a real word" checks during play, independent of difficulty."""
+    if tier is None:
+        return frozenset().union(*(ladder_words(length, t) for t in LADDER_TIERS))
+    return _load(f"ladder_{length}_{tier}.txt")
+
+
+@cache
+def ladder_tier_of(length: int) -> dict[str, str]:
+    """word -> commonality tier, for the given length."""
+    return {w: t for t in LADDER_TIERS for w in ladder_words(length, t)}
+
+
+@cache
+def ladder_neighbors(length: int) -> dict[str, tuple[str, ...]]:
+    """Precomputed edit-adjacency for words of this length: word -> neighbor words, which may
+    be this length (a substitution) or length-1/length+1 (an insertion/deletion)."""
+    path = _WORDS_DIR / f"ladder_graph_{length}.json"
+    try:
+        raw: dict[str, list[str]] = json.loads(path.read_text())
+    except FileNotFoundError:
+        return {}  # e.g. a length with no generated graph -- just no neighbors
+    return {w: tuple(ns) for w, ns in raw.items()}
