@@ -417,10 +417,14 @@ body {
   inset: 0;
   background: rgba(43, 43, 43, 0.45);
   display: flex;
-  align-items: center;
   justify-content: center;
   padding: 18px;
   z-index: 60;
+  /* Scrolls the modal itself rather than centering with align-items, which (on a flex container
+     taller than its content) clips the start of any overflow instead of letting you reach it --
+     same flexbox centering/overflow gotcha as .ladder-wrap. The card centers via its own auto
+     margins below, which have no such bug. */
+  overflow-y: auto;
 }
 .modal[hidden] {
   display: none;
@@ -431,6 +435,7 @@ body {
   border-radius: 14px;
   padding: 20px;
   width: min(360px, 100%);
+  margin: auto;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
 }
 .modal-h {
