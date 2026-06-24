@@ -349,4 +349,4 @@ def test_result():
         status="won", entries=["cold", "cord", "card", "ward", "warm"], pid="p1", winner_pid="p1"
     )
     res = wordladder.result(won)
-    assert res == {"won": True, "answer": "warm", "guesses_used": 4}
+    assert res == {"won": True, "answer": "cold → warm", "guesses_used": 4}

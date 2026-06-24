@@ -423,6 +423,6 @@ def result(state: dict) -> dict:
     )
     return {
         "won": state["status"] == WON,
-        "answer": state["end_word"],
+        "answer": f"{state['start_word']} → {state['end_word']}",
         "guesses_used": len(entries) - 1,
     }
