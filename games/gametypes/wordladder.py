@@ -320,9 +320,7 @@ def handle_action(state: dict, pid: str, name: str, action: str, data: dict):
     edit_mode = state["edit_mode"]
     end_word = state["end_word"]
     for i in range(1, len(new_entries)):
-        if new_entries[i] == end_word and _is_valid_edit(
-            new_entries[i - 1], new_entries[i], edit_mode
-        ):
+        if new_entries[i] == end_word and _chain_complete(new_entries[: i + 1], edit_mode):
             new_entries = new_entries[: i + 1]
             status = WON
             winner_pid = pid
@@ -333,7 +331,11 @@ def handle_action(state: dict, pid: str, name: str, action: str, data: dict):
         # end_word is the only possible next move. Auto-append it rather than leaving the puzzle
         # stuck "in progress" with no way to take that forced last step.
         last = new_entries[-1]
-        if last != end_word and _is_valid_edit(last, end_word, edit_mode):
+        if (
+            last != end_word
+            and _is_valid_edit(last, end_word, edit_mode)
+            and _chain_complete(new_entries, edit_mode)
+        ):
             new_entries.append(end_word)
             status = WON
             winner_pid = pid
@@ -344,6 +346,16 @@ def handle_action(state: dict, pid: str, name: str, action: str, data: dict):
     if status == WON:
         events.append({"kind": "win", "name": name, "word": end_word})
     return new_state, events
+
+
+def _chain_complete(entries: list[str], edit_mode: str) -> bool:
+    """True if every row from 1 onward is a real word and a valid edit from the row above it --
+    i.e. the whole ladder up to this point holds together, not just the last step into it."""
+    return all(
+        word in wordlists.ladder_words(len(word))
+        and _is_valid_edit(entries[i - 1], word, edit_mode)
+        for i, word in enumerate(entries[1:], start=1)
+    )
 
 
 def _row_view(entries: list[str], edit_mode: str) -> list[dict]:

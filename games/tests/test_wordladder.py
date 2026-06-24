@@ -235,17 +235,42 @@ def test_win_on_reaching_end_word_even_early():
     assert any(e["kind"] == "win" for e in events)
 
 
+def test_not_won_if_an_earlier_row_is_not_a_valid_edit():
+    # Row 1 ("cald") is one substitution from both "cold" and end_word "card", but it's
+    # gibberish, not a real word -- the chain leading up to end_word is broken, so reaching
+    # end_word on the next row must not count as a win.
+    state = _state(start="cold", end="card", entries=["cold", "cald"])
+    new_state, events = wordladder.handle_action(
+        state, "p1", "ANA", "set_word", {"index": 2, "word": "card"}
+    )
+    assert new_state["status"] == "playing"
+    assert new_state["winner_pid"] is None
+    assert not any(e["kind"] == "win" for e in events)
+
+
+def test_not_won_if_an_earlier_row_is_blank():
+    # Skipping ahead and writing end_word straight into a later row, leaving earlier rows blank,
+    # must not count as a win either.
+    state = _state(start="cold", end="card", entries=["cold"])
+    new_state, events = wordladder.handle_action(
+        state, "p1", "ANA", "set_word", {"index": 3, "word": "card"}
+    )
+    assert new_state["status"] == "playing"
+    assert new_state["winner_pid"] is None
+    assert not any(e["kind"] == "win" for e in events)
+
+
 def test_auto_completes_when_last_row_is_one_edit_from_end_word():
     # The UI never lets a player type the end word itself into the final ghost row, so the
     # moment their last real row is one valid edit away, end_word is the only possible next
     # move -- it should be appended and the game won, not left "in progress" forever.
-    state = _state(start="cold", end="cord", entries=["cold", "card"])
+    state = _state(start="cold", end="cult", entries=["cold", "colt"])
     new_state, events = wordladder.handle_action(
-        state, "p1", "ANA", "set_word", {"index": 1, "word": "card"}
+        state, "p1", "ANA", "set_word", {"index": 1, "word": "colt"}
     )
     assert new_state["status"] == "won"
     assert new_state["winner_pid"] == "p1"
-    assert new_state["boards"]["p1"]["entries"] == ["cold", "card", "cord"]
+    assert new_state["boards"]["p1"]["entries"] == ["cold", "colt", "cult"]
     assert any(e["kind"] == "win" for e in events)
 
 
