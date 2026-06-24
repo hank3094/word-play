@@ -203,16 +203,20 @@ def generate_puzzle(word_length: int, steps: int, difficulty: str, edit_mode: st
         if not stuck and len(path) == steps + 1:
             if max(_tier_index(w) for w in path) == ceiling_idx:
                 collapsed = _remove_shortcuts(path, edit_mode, word_length, ceiling_idx)
-                # insert_delete puzzles must actually exercise an indel step somewhere, or they're
-                # indistinguishable from a substitute puzzle -- reject and keep sampling.
-                if edit_mode != "insert_delete" or _has_indel_step(collapsed):
+                # Collapsing can shorten the walk below the requested step count (a detour turned
+                # out to have a shortcut) -- that no longer satisfies the request, so reject and
+                # keep sampling rather than handing back a too-short puzzle.
+                if len(collapsed) == steps + 1 and (
+                    edit_mode != "insert_delete" or _has_indel_step(collapsed)
+                ):
                     return collapsed  # full success
         if best is None or len(path) > len(best):
             best = path
 
     if best is None:
         return [start_pool[0]]
-    return _remove_shortcuts(best, edit_mode, word_length, ceiling_idx)
+    collapsed_best = _remove_shortcuts(best, edit_mode, word_length, ceiling_idx)
+    return collapsed_best if len(collapsed_best) == len(best) else best
 
 
 def validate_options(options: dict) -> str | None:
@@ -323,6 +327,16 @@ def handle_action(state: dict, pid: str, name: str, action: str, data: dict):
             status = WON
             winner_pid = pid
             break
+    else:
+        # The UI never lets a player type into the final (end-word) row -- it's shown only as a
+        # locked ghost hint -- so the moment their last real row is one valid edit from end_word,
+        # end_word is the only possible next move. Auto-append it rather than leaving the puzzle
+        # stuck "in progress" with no way to take that forced last step.
+        last = new_entries[-1]
+        if last != end_word and _is_valid_edit(last, end_word, edit_mode):
+            new_entries.append(end_word)
+            status = WON
+            winner_pid = pid
 
     new_boards = {**state["boards"], pid: {"entries": new_entries}}
     new_state = {**state, "boards": new_boards, "status": status, "winner_pid": winner_pid}

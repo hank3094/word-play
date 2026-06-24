@@ -73,6 +73,14 @@ def test_pick_a_puzzle_respects_endpoints_length():
     assert len(set(path)) == len(path)  # no repeats
 
 
+def test_generated_puzzle_always_has_the_requested_step_count():
+    # A successful sample can have a shortcut collapsed out of it, which used to be returned
+    # as-is even though it was then shorter than the requested step count.
+    for steps in (1, 2, 3, 4, 5):
+        path = wordladder.generate_puzzle(4, steps, "easy", "substitute")
+        assert len(path) == steps + 1
+
+
 def test_insert_delete_puzzles_always_contain_an_indel_step():
     for _ in range(
         20
@@ -129,7 +137,9 @@ def test_append_row():
 
 
 def test_overwrite_middle_row_does_not_truncate():
-    state = _state(entries=["cold", "cord", "card", "ward"])
+    # "cart" (not "ward") for the last row -- "ward" is coincidentally one valid edit from the
+    # default end word "warm", which would auto-complete the puzzle and defeat this test's point.
+    state = _state(entries=["cold", "cord", "card", "cart"])
     new_state, _ = wordladder.handle_action(
         state, "p1", "ANA", "set_word", {"index": 1, "word": "bold"}
     )
@@ -137,7 +147,7 @@ def test_overwrite_middle_row_does_not_truncate():
         "cold",
         "bold",
         "card",
-        "ward",
+        "cart",
     ]  # later rows untouched
 
 
@@ -222,6 +232,20 @@ def test_win_on_reaching_end_word_even_early():
     )
     assert new_state["status"] == "won"
     assert new_state["winner_pid"] == "p1"
+    assert any(e["kind"] == "win" for e in events)
+
+
+def test_auto_completes_when_last_row_is_one_edit_from_end_word():
+    # The UI never lets a player type the end word itself into the final ghost row, so the
+    # moment their last real row is one valid edit away, end_word is the only possible next
+    # move -- it should be appended and the game won, not left "in progress" forever.
+    state = _state(start="cold", end="cord", entries=["cold", "card"])
+    new_state, events = wordladder.handle_action(
+        state, "p1", "ANA", "set_word", {"index": 1, "word": "card"}
+    )
+    assert new_state["status"] == "won"
+    assert new_state["winner_pid"] == "p1"
+    assert new_state["boards"]["p1"]["entries"] == ["cold", "card", "cord"]
     assert any(e["kind"] == "win" for e in events)
 
 
