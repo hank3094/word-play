@@ -737,10 +737,13 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  /* Not justify-content:center: in a scrolling flex container that clips the start of the
+     overflow instead of letting you scroll to it (a well-known flexbox gotcha on mobile
+     Safari/Chrome) -- centering via the child's own auto margins below has no such bug, since
+     those margins just collapse to 0 once content is tall enough to scroll. */
   min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 6px 0;
 }
 .ladder-board {
@@ -748,6 +751,7 @@ body {
   flex-direction: column;
   gap: 6px;
   width: 100%;
+  margin: auto 0;
 }
 /* Each row is only as wide as its own word and centered independently — rows of different
    lengths (insert/delete mode) line up on their centre, not their left/right edge, so a shorter

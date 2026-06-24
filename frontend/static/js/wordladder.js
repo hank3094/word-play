@@ -18,6 +18,9 @@ const WordLadder = (() => {
   let selectionReady = false; // whether the default top-row selection has been applied yet
   let typingPeers = {}; // pid -> {name, text, index, color}: other sharers' live typing
   let lastTypingSent = 0;
+  let pendingWords = {}; // rowIndex -> word just submitted, shown until the snapshot confirms it
+  // (otherwise the row briefly re-renders its old stored word from the stale snapshot still in
+  // flight before the server's reply lands -- see switchRow/focusRow leaving a just-edited row).
 
   function init(refs) {
     els = refs;
@@ -42,6 +45,7 @@ const WordLadder = (() => {
     cursorPos = 0;
     selectionReady = false;
     typingPeers = {};
+    pendingWords = {};
   }
 
   function reset() {
@@ -52,6 +56,7 @@ const WordLadder = (() => {
     cursorPos = 0;
     selectionReady = false;
     typingPeers = {};
+    pendingWords = {};
   }
 
   function board() {
@@ -61,13 +66,21 @@ const WordLadder = (() => {
     return board() && board().status === "playing";
   }
   // Each player's own rows, defaulting to just the (fixed, always-valid) start word until they've
-  // made their first move. Once finished, everyone sees the winner's frozen rows instead.
+  // made their first move. Once finished, everyone sees the winner's frozen rows instead. Rows
+  // with a pending (just-submitted, not yet server-confirmed) word show that word instead of
+  // whatever's still in this stale-by-definition snapshot.
   function myRows() {
     const b = board();
     if (!b) return [];
-    if (b.status === "won") return b.boards[b.winnerPid] || [];
-    return (
-      b.boards[myId] || [{ word: b.startWord, isWord: true, isValidEdit: true }]
+    const rows =
+      b.status === "won"
+        ? b.boards[b.winnerPid] || []
+        : b.boards[myId] || [
+            { word: b.startWord, isWord: true, isValidEdit: true },
+          ];
+    if (!Object.keys(pendingWords).length) return rows;
+    return rows.map((row, i) =>
+      i in pendingWords ? { ...row, word: pendingWords[i] } : row,
     );
   }
   // The puzzle's full skeleton is always shown (start + every intermediate + end); this is the
@@ -86,6 +99,13 @@ const WordLadder = (() => {
   function applySnapshot(s) {
     if (s.id !== gid) return;
     snap = s;
+    const b = board();
+    const confirmedRows = b && (b.boards[myId] || []);
+    for (const i of Object.keys(pendingWords)) {
+      if (confirmedRows && (confirmedRows[i] || {}).word === pendingWords[i]) {
+        delete pendingWords[i];
+      }
+    }
     if (!isPlaying()) {
       editingIndex = null;
       buffer = "";
@@ -124,6 +144,7 @@ const WordLadder = (() => {
   }
 
   function submitCurrentRow() {
+    pendingWords[editingIndex] = buffer;
     Net.send("game_action", {
       gameId: gid,
       action: "set_word",
@@ -270,6 +291,7 @@ const WordLadder = (() => {
   function onRejected() {
     // Word ladder only rejects structural issues (bad index, already finished) — none of which
     // the UI itself can trigger in normal use. Flash and bail defensively.
+    pendingWords = {};
     LadderBoard.flashInvalid();
     renderBoard();
   }
