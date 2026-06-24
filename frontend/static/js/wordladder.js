@@ -100,25 +100,34 @@ const WordLadder = (() => {
     if (s.id !== gid) return;
     snap = s;
     const b = board();
-    const confirmedRows = b && (b.boards[myId] || []);
-    for (const i of Object.keys(pendingWords)) {
-      if (confirmedRows && (confirmedRows[i] || {}).word === pendingWords[i]) {
-        delete pendingWords[i];
-      }
-    }
+    // pendingWords only means anything while I'm actively playing my own board -- once play ends
+    // (anyone wins), there's nothing left to reconcile: I can't submit further actions, and once
+    // won the server only reports the *winner's* board, so a non-winner's pendingWords could
+    // never be confirmed against it and would otherwise leak, stale, into the rendering of the
+    // winner's frozen board (myRows() overlays pendingWords by row index regardless of whose
+    // board is showing).
     if (!isPlaying()) {
+      pendingWords = {};
       editingIndex = null;
       buffer = "";
-    } else if (!selectionReady) {
-      // Default: start at the top row, seeded with whatever's already there (e.g. rejoining a
-      // game in progress).
-      selectionReady = true;
-      const row = myRows()[1];
-      editingIndex = 1;
-      buffer = row ? row.word : "";
-      cursorPos = buffer.length;
-    } else if (editingIndex > maxEditableIndex()) {
-      editingIndex = maxEditableIndex();
+    } else {
+      const confirmedRows = b.boards[myId] || [];
+      for (const i of Object.keys(pendingWords)) {
+        if ((confirmedRows[i] || {}).word === pendingWords[i]) {
+          delete pendingWords[i];
+        }
+      }
+      if (!selectionReady) {
+        // Default: start at the top row, seeded with whatever's already there (e.g. rejoining a
+        // game in progress).
+        selectionReady = true;
+        const row = myRows()[1];
+        editingIndex = 1;
+        buffer = row ? row.word : "";
+        cursorPos = buffer.length;
+      } else if (editingIndex > maxEditableIndex()) {
+        editingIndex = maxEditableIndex();
+      }
     }
     render();
   }
