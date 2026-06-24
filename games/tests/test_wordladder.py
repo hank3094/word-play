@@ -42,7 +42,7 @@ def test_is_valid_edit_insert_delete_requires_mode():
     assert wordladder._is_valid_edit("cat", "dogs", "insert_delete") is False  # not one indel
 
 
-def test_remove_shortcuts_collapses_a_detour(monkeypatch):
+def test_bfs_shortest_path_finds_the_shortcut(monkeypatch):
     # a -> b -> c -> d -> e, but a and d share neighbor "x", a 2-edge shortcut shorter than the
     # 3-edge detour through b and c.
     graph = {
@@ -55,15 +55,20 @@ def test_remove_shortcuts_collapses_a_detour(monkeypatch):
     }
     monkeypatch.setattr(wordladder.wordlists, "ladder_neighbors", lambda length: graph)
     monkeypatch.setattr(wordladder, "_tier_index", lambda word: 0)
-    path = wordladder._remove_shortcuts(["a", "b", "c", "d", "e"], "substitute", 1, 0)
+    path = wordladder._bfs_shortest_path("a", "e", "substitute", 1, 0)
     assert path == ["a", "x", "d", "e"]
 
 
-def test_remove_shortcuts_leaves_a_path_with_no_shortcut_alone():
-    path = wordladder._remove_shortcuts(
-        ["cold", "cord", "card", "ward", "warm"], "substitute", 4, 1
-    )
+def test_bfs_shortest_path_leaves_a_path_with_no_shortcut_alone():
+    path = wordladder._bfs_shortest_path("cold", "warm", "substitute", 4, 1)
     assert path == ["cold", "cord", "card", "ward", "warm"]
+
+
+def test_bfs_shortest_path_returns_none_when_unreachable(monkeypatch):
+    graph = {"a": ("b",), "b": ("a",), "x": ("y",), "y": ("x",)}
+    monkeypatch.setattr(wordladder.wordlists, "ladder_neighbors", lambda length: graph)
+    monkeypatch.setattr(wordladder, "_tier_index", lambda word: 0)
+    assert wordladder._bfs_shortest_path("a", "x", "substitute", 1, 0) is None
 
 
 def test_pick_a_puzzle_respects_endpoints_length():
