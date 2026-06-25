@@ -127,7 +127,11 @@ const LadderBoard = (() => {
         if (clickable) {
           tile.addEventListener("click", (e) => {
             e.stopPropagation();
-            onCellClick(i, c);
+            // Split the tile down the middle -- the caret lands on whichever side of it the
+            // click was closer to, same as clicking text in any normal editor.
+            const rect = tile.getBoundingClientRect();
+            const before = e.clientX - rect.left < rect.width / 2;
+            onCellClick(i, before ? c : c + 1);
           });
         }
         tilesWrap.appendChild(tile);
