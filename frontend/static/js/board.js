@@ -10,14 +10,13 @@ const Board = (() => {
   }
 
   // rows: [{word, marks}]. The active row shows the live letters:
-  //   current    — your own letters, drawn solid on top. May contain spaces (boxes skipped over
-  //                via left/right and not yet typed into) -- those render blank, not as letters.
-  //   showCursor — whether to show the cursor box (true only when it's your own typing).
-  //   cursorPos  — which box (0..wordLength) the cursor sits on.
+  //   cells      — your own letters, one slot per box ("" or a letter), drawn solid on top.
+  //   showCursor — whether to show the caret (true only when it's your own typing).
+  //   cursorPos  — which box (0..wordLength-1) the caret sits on.
   //   ghosts     — [{text, color}] from other sharers, overlaid beneath at low opacity.
   function render({
     rows = [],
-    current = "",
+    cells = [],
     showCursor = true,
     cursorPos = 0,
     wordLength = 5,
@@ -43,6 +42,11 @@ const Board = (() => {
       for (let c = 0; c < cols; c++) {
         const tile = document.createElement("div");
         tile.className = "tile";
+        // Explicit, not auto-placed -- the active row's caret is also explicitly placed and may
+        // share a column with the last tile; auto-placement would otherwise treat that column as
+        // "taken" by the caret and bump this tile onto a new row instead of overlapping it.
+        tile.style.gridRow = "1";
+        tile.style.gridColumn = c + 1;
         if (filled) {
           tile.textContent = filled.word[c] || "";
           tile.classList.add(filled.marks[c]); // hit | present | miss
@@ -59,14 +63,11 @@ const Board = (() => {
               tile.appendChild(span);
             }
           }
-          const ch = current[c];
-          if (ch && ch !== " ") {
+          const ch = cells[c];
+          if (ch) {
             // A text node keeps the solid letter on top of any ghost spans.
             tile.appendChild(document.createTextNode(ch));
             tile.classList.add("filled");
-          }
-          if (showCursor && c === cursorPos) {
-            tile.classList.add("cursor");
           }
           if (showCursor && onTileClick) {
             tile.classList.add("clickable");
@@ -75,7 +76,28 @@ const Board = (() => {
         }
         rowEl.appendChild(tile);
       }
-      if (isActive) rowEl.classList.add("active");
+      if (isActive) {
+        rowEl.classList.add("active");
+        if (showCursor) {
+          // Placed as a real grid item in the cursor's column, not absolutely positioned --
+          // the row's own grid tracks already handle alignment/gaps correctly.
+          const caret = document.createElement("div");
+          caret.className = "caret";
+          // Both axes explicit -- the column's already occupied by that box's tile, and grid
+          // auto-placement would otherwise push an item with only a column set onto a new row.
+          caret.style.gridRow = "1";
+          // cursorPos can be `len` (past the last box, e.g. right after typing/clicking the last
+          // letter) -- there's no column there, so anchor to the last box's column instead and
+          // flip to its right edge rather than its left.
+          if (cursorPos >= cols) {
+            caret.style.gridColumn = cols;
+            caret.classList.add("caret-end");
+          } else {
+            caret.style.gridColumn = cursorPos + 1;
+          }
+          rowEl.appendChild(caret);
+        }
+      }
       root.appendChild(rowEl);
     }
   }

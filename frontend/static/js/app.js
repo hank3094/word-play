@@ -751,6 +751,11 @@
         ) {
           e.preventDefault();
           gv.controller.input(ARROW_KEYS[e.key]);
+        } else if (activeGameType === "wordladder" && e.key === " ") {
+          // Only insert/delete-mode ladder rows treat space as a legal character -- the
+          // controller itself ignores it in substitute mode, same as any other illegal key.
+          e.preventDefault();
+          gv.controller.input("space");
         } else if (/^[a-zA-Z]$/.test(e.key)) {
           e.preventDefault();
           gv.controller.input(e.key.toLowerCase());

@@ -609,11 +609,28 @@ body {
 .tile.filled {
   border-color: var(--fg-dim);
 }
-.tile.cursor {
-  border-color: var(--accent);
-}
 .tile.clickable {
   cursor: pointer;
+}
+/* A blinking vertical caret, placed as a real grid item in the cursor's column (see board.js) so
+   it lines up with the row's own tracks/gaps without any pixel math. */
+.caret {
+  width: 2px;
+  margin: 6px 0;
+  background: var(--accent);
+  animation: caret-blink 1s steps(1) infinite;
+  pointer-events: none;
+  justify-self: start;
+}
+/* Past the last box (e.g. right after typing the final letter) -- anchored to that box's column
+   but flipped to its right edge instead of its left. */
+.caret.caret-end {
+  justify-self: end;
+}
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
 }
 .tile.hit {
   background: var(--hit);
@@ -787,18 +804,35 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  --ladder-tile: clamp(32px, 9vw, 52px);
   /* A row with zero real tiles (untouched insert/delete row, just the underscore) would otherwise
      collapse to nothing -- the underscore is absolutely positioned, so it can't hold this open by
      itself. Match a tile's height so every row, empty or not, takes up the same vertical space. */
-  min-height: clamp(32px, 9vw, 52px);
+  min-height: var(--ladder-tile);
 }
 .ladder-row .tile {
   cursor: pointer;
 }
 .ladder-row .tile {
-  width: clamp(32px, 9vw, 52px);
-  height: clamp(32px, 9vw, 52px);
+  width: var(--ladder-tile);
+  height: var(--ladder-tile);
   font-size: clamp(16px, 5vw, 24px);
+}
+/* Caret for ladder rows: same idea as board.js's grid-placed caret, but this row is a flex
+   row of variable-width tiles, so it's positioned with plain pixel math instead -- each tile is
+   exactly --ladder-tile wide plus the row's 6px gap. */
+.ladder-row-tiles .caret {
+  position: absolute;
+  left: calc(var(--caret-index) * (var(--ladder-tile) + 6px));
+  top: 0;
+  height: var(--ladder-tile);
+  margin: 0;
+}
+/* Anchored to the last real box's column (see ladderboard.js) but flipped to its right edge. */
+.ladder-row-tiles .caret.caret-end {
+  left: calc(
+    var(--caret-index) * (var(--ladder-tile) + 6px) + var(--ladder-tile)
+  );
 }
 .ladder-row[data-index="0"] .tile,
 .ladder-row.ghost-row .tile {
@@ -841,7 +875,7 @@ body {
   top: 0;
   margin-left: 6px;
   width: 32px;
-  height: clamp(32px, 9vw, 52px);
+  height: var(--ladder-tile);
   border: none;
   background: transparent;
 }
@@ -855,24 +889,12 @@ body {
   border-radius: 2px;
   background: var(--line);
 }
-.tile.next-slot.cursor::after {
-  background: var(--accent);
-}
 .ladder-row.invalid-word .tile {
   border-color: var(--danger);
 }
 .ladder-row.invalid-edit .tile {
   border-style: dashed;
   border-color: var(--present);
-}
-.ladder-row .tile.cursor {
-  border-style: solid;
-  border-color: var(--accent);
-}
-/* Same specificity as the cursor rule above (also .ladder-row + two classes) and declared after,
-   so this wins: the underscore bar never grows a border, even when it's the active caret. */
-.ladder-row .tile.next-slot {
-  border: none;
 }
 .ladder-row.invalid {
   animation: shake 0.3s;

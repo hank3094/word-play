@@ -7,9 +7,10 @@ const Wordle = (() => {
   let myId = null;
   let gid = null;
   let snap = null;
-  let buffer = "";
-  let cursorPos = 0; // caret position within buffer (0..wordLength) -- left/right move it, typing
-  // overwrites whichever box it's on (the row is a fixed length, so there's nowhere to insert)
+  let cells = []; // one slot per box -- "" (empty) or a letter -- always exactly wordLength long
+  // once the game's loaded; cursorPos is the selected box index (0..wordLength-1). Typing
+  // overwrites whichever box it's on; nothing else ever shifts.
+  let cursorPos = 0;
   let pending = null; // a guess that's been submitted and is awaiting the server's response
   let rejectMsg = null; // why the last guess was rejected, shown until the next keystroke
   let prevRows = 0;
@@ -46,7 +47,7 @@ const Wordle = (() => {
 
   function open(gameId) {
     gid = gameId;
-    buffer = "";
+    cells = [];
     cursorPos = 0;
     pending = null;
     rejectMsg = null;
@@ -59,7 +60,7 @@ const Wordle = (() => {
   function reset() {
     gid = null;
     snap = null;
-    buffer = "";
+    cells = [];
     cursorPos = 0;
     pending = null;
     rejectMsg = null;
@@ -81,7 +82,7 @@ const Wordle = (() => {
     snap = s;
     if (s.board.rows.length !== prevRows) {
       // a guess landed (mine or someone else's) — the active row advanced
-      buffer = "";
+      cells = [];
       cursorPos = 0;
       pending = null;
       rejectMsg = null;
@@ -104,14 +105,14 @@ const Wordle = (() => {
   function input(key) {
     if (!isPlaying()) return;
     const len = board().wordLength;
+    if (cells.length !== len) cells = Array(len).fill("");
     if (key === "enter") {
-      // Every box must hold a real letter -- no gaps left over from typing out of order via
-      // left/right -- before this counts as a guess.
-      if (buffer.length === len && !buffer.includes(" ")) {
-        // Clear the buffer immediately so the next word's letters aren't dropped (and a rejected
+      // Every box must hold a real letter before this counts as a guess.
+      if (cells.every(Boolean)) {
+        // Clear the row immediately so the next word's letters aren't dropped (and a rejected
         // word can't get stuck). Keep it visible as `pending` until the server replies.
-        pending = buffer;
-        buffer = "";
+        pending = cells.join("");
+        cells = Array(len).fill("");
         cursorPos = 0;
         // Identifies this exact submission so a forced retry (see sendGuess) replays the same
         // request rather than the server mistaking it for a fresh guess and double-counting it.
@@ -139,32 +140,19 @@ const Wordle = (() => {
     pending = null; // composing a fresh guess
     rejectMsg = null; // clear any "not a word" note once they start retyping
     if (key === "back") {
-      // Overwrite-in-place, not a shift: clearing a box leaves the others where they are. Pad
-      // with spaces first since the cursor may sit past the end of what's actually been typed
-      // (left/right lets you step ahead to any of the fixed boxes).
-      const padded = buffer.padEnd(len, " ");
-      // Clears whichever box the cursor is over -- the one under it if it's sitting on a real
-      // tile, otherwise (past the last box) the last real one -- then steps back, same as a
-      // normal backspace, so repeated presses walk back through the word clearing as they go.
-      const target = Math.min(cursorPos, len - 1);
-      buffer = (
-        padded.slice(0, target) +
-        " " +
-        padded.slice(target + 1)
-      ).replace(/ +$/, "");
-      cursorPos = Math.max(0, cursorPos - 1);
+      // The cursor sits *before* the box at cursorPos, same as any text caret -- backspace
+      // always clears the box just behind it, never the one it's currently sitting on (that
+      // would read as deleting forward). One rule, no cases.
+      if (cursorPos > 0) {
+        cursorPos -= 1;
+        cells[cursorPos] = "";
+      }
     } else if (/^[a-z]$/.test(key)) {
-      // The row is exactly wordLength boxes -- typing overwrites whichever box the cursor sits
-      // on (there's nowhere for an inserted extra letter to go), capped at that length. Padded
-      // the same way as backspace, for the same reason.
+      // Any box can be clicked/arrowed to directly and typed into -- this always overwrites
+      // exactly that box, whether it was empty or already held a letter.
       if (cursorPos >= len) return;
-      const padded = buffer.padEnd(len, " ");
-      buffer = (
-        padded.slice(0, cursorPos) +
-        key +
-        padded.slice(cursorPos + 1)
-      ).replace(/ +$/, "");
-      cursorPos += 1;
+      cells[cursorPos] = key;
+      cursorPos = Math.min(len, cursorPos + 1);
     } else {
       return;
     }
@@ -254,7 +242,7 @@ const Wordle = (() => {
       Net.send("game_action", {
         gameId: gid,
         action: "typing",
-        data: { text: buffer },
+        data: { text: cells.map((c) => c || " ").join("") },
       });
     }
   }
@@ -266,7 +254,7 @@ const Wordle = (() => {
 
     // Your own letters are always solid and on top; the cursor shows only while composing (not
     // while a submitted guess is sitting there awaiting the server's response).
-    const current = pending !== null ? pending : buffer;
+    const activeCells = pending !== null ? pending.split("") : cells;
     const showCursor = pending === null;
     // You only see others' live typing while you're sharing yours too.
     let ghosts = null;
@@ -283,7 +271,7 @@ const Wordle = (() => {
 
     Board.render({
       rows: b.rows,
-      current,
+      cells: activeCells,
       showCursor,
       cursorPos,
       ghosts,

@@ -12,9 +12,16 @@ const WordLadder = (() => {
   let myId = null;
   let gid = null;
   let snap = null;
-  let editingIndex = null; // which row (1..maxEditableIndex()) the local buffer is editing
+  let editingIndex = null; // which row (1..maxEditableIndex()) is being edited
+  // Substitute mode (fixed wordLength per row) uses `cells`: one slot per box, "" or a letter,
+  // typed into by overwriting whichever box the cursor's on. Insert/delete mode (no fixed
+  // length) uses `buffer`: a plain string with a real text caret that inserts/deletes-and-shifts.
+  // Only one is ever "live" -- which one depends on board().editMode, which is fixed per game.
+  let cells = [];
   let buffer = "";
-  let cursorPos = 0; // caret position within buffer (0..buffer.length)
+  // cursorPos means a box index (0..wordLength-1) in substitute mode, or a caret gap
+  // (0..buffer.length) in insert/delete mode.
+  let cursorPos = 0;
   let selectionReady = false; // whether the default top-row selection has been applied yet
   let typingPeers = {}; // pid -> {name, text, index, color}: other sharers' live typing
   let lastTypingSent = 0;
@@ -50,6 +57,7 @@ const WordLadder = (() => {
   function open(gameId) {
     gid = gameId;
     editingIndex = null;
+    cells = [];
     buffer = "";
     cursorPos = 0;
     selectionReady = false;
@@ -61,6 +69,7 @@ const WordLadder = (() => {
     gid = null;
     snap = null;
     editingIndex = null;
+    cells = [];
     buffer = "";
     cursorPos = 0;
     selectionReady = false;
@@ -118,6 +127,7 @@ const WordLadder = (() => {
     if (!isPlaying()) {
       pendingWords = {};
       editingIndex = null;
+      cells = [];
       buffer = "";
     } else {
       const confirmedRows = b.boards[myId] || [];
@@ -132,13 +142,37 @@ const WordLadder = (() => {
         selectionReady = true;
         const row = myRows()[1];
         editingIndex = 1;
-        buffer = row ? row.word : "";
-        cursorPos = buffer.length;
+        seedRow(row ? row.word : "");
+        // Substitute mode's boxes are an overwrite grid -- start at the first one. Insert/delete
+        // mode has a real end-of-text to land at.
+        cursorPos = b.editMode === "substitute" ? 0 : buffer.length;
       } else if (editingIndex > maxEditableIndex()) {
         editingIndex = maxEditableIndex();
       }
     }
     render();
+  }
+
+  // Loads a stored row's word into whichever representation the board's editMode actually uses.
+  function seedRow(word) {
+    const b = board();
+    const w = word || "";
+    if (b.editMode === "substitute") {
+      cells = Array.from({ length: b.wordLength }, (_, i) =>
+        w[i] && w[i] !== " " ? w[i] : "",
+      );
+    } else {
+      buffer = w;
+    }
+  }
+
+  // The current row's content as a flat string -- for submitting, broadcasting live typing, and
+  // comparing against a row's stored word to decide whether it needs (re)committing.
+  function rowText() {
+    const b = board();
+    return b.editMode === "substitute"
+      ? cells.map((c) => c || " ").join("")
+      : buffer;
   }
 
   function onFeed(ev) {
@@ -153,35 +187,32 @@ const WordLadder = (() => {
     }
   }
 
-  // Substitute mode's boxes are fixed at wordLength regardless of how much has actually been
-  // typed, so the cursor can sit anywhere in that range; insert/delete mode has no fixed length,
-  // so the cursor can't go past whatever's actually there.
-  function maxCursor() {
-    const b = board();
-    return b.editMode === "substitute" ? b.wordLength : buffer.length;
-  }
-
   function submitCurrentRow() {
-    pendingWords[editingIndex] = buffer;
+    const word = rowText();
+    pendingWords[editingIndex] = word;
     Net.send("game_action", {
       gameId: gid,
       action: "set_word",
       // Sent exactly as typed, gaps (placeholder spaces) included -- the server treats a word with
       // any gap, left/internal/right, as not a real word rather than silently closing it up.
-      data: { index: editingIndex, word: buffer },
+      data: { index: editingIndex, word },
     });
   }
 
-  // Changes which row the buffer points at, re-seeding it from that row's stored content. Doesn't
-  // submit anything itself -- callers decide whether the row being left needs committing first.
+  // Changes which row is being edited, re-seeding from that row's stored content. Doesn't submit
+  // anything itself -- callers decide whether the row being left needs committing first.
   function switchRow(index, desiredCursor) {
     if (!isPlaying() || index < 1 || index > maxEditableIndex()) return;
+    const b = board();
     if (index !== editingIndex) {
       const row = myRows()[index];
-      buffer = row ? row.word : "";
+      seedRow(row ? row.word : "");
     }
     editingIndex = index;
-    cursorPos = Math.max(0, Math.min(desiredCursor, maxCursor()));
+    // Substitute mode's boxes are a fixed grid; insert/delete mode is a real caret with no
+    // fixed length.
+    const maxCur = b.editMode === "substitute" ? b.wordLength : buffer.length;
+    cursorPos = Math.max(0, Math.min(desiredCursor, maxCur));
     renderBoard();
     sendTyping();
   }
@@ -192,7 +223,7 @@ const WordLadder = (() => {
   function focusRow(index, desiredCursor) {
     if (index !== editingIndex && editingIndex !== null) {
       const storedWord = (myRows()[editingIndex] || {}).word || "";
-      if (buffer !== storedWord) submitCurrentRow();
+      if (rowText() !== storedWord) submitCurrentRow();
     }
     switchRow(index, desiredCursor);
   }
@@ -203,14 +234,23 @@ const WordLadder = (() => {
 
   function input(key) {
     if (!isPlaying() || editingIndex === null) return;
+    const b = board();
+    const substitute = b.editMode === "substitute";
+    if (substitute && cells.length !== b.wordLength) {
+      cells = Array(b.wordLength).fill("");
+    }
+    // The virtual keyboard's friendly action-name for its dedicated SPACE button -- translated
+    // to the literal character once, here, so everything below just treats it like any other key.
+    if (key === "space") key = " ";
 
     if (key === "enter") {
       submitCurrentRow();
-      // Substitute mode's boxes are fixed, so the next row starts fresh at position 0; insert/
-      // delete mode has no fixed length, so picking up after whatever's already there (the end of
-      // its buffer) makes more sense.
-      const landAt = board().editMode === "substitute" ? 0 : Infinity;
-      switchRow(Math.min(editingIndex + 1, maxEditableIndex()), landAt);
+      // Substitute mode's boxes are an overwrite grid -- the next row starts fresh at the first
+      // box; insert/delete mode has a real end-of-text to pick up after.
+      switchRow(
+        Math.min(editingIndex + 1, maxEditableIndex()),
+        substitute ? 0 : Infinity,
+      );
       return;
     }
     if (key === "up") {
@@ -227,76 +267,41 @@ const WordLadder = (() => {
       return;
     }
     if (key === "right") {
-      if (board().editMode === "insert_delete" && cursorPos === buffer.length) {
-        // Past the last real character: stepping right grows the word by one empty placeholder
-        // box rather than just moving a caret that has nowhere further to go.
-        if (buffer.length < 24) {
-          buffer += " ";
-          cursorPos += 1;
-          renderBoard();
-          sendTyping();
-        }
-        return;
-      }
-      cursorPos = Math.min(maxCursor(), cursorPos + 1);
+      const maxCur = substitute ? b.wordLength : buffer.length;
+      cursorPos = Math.min(maxCur, cursorPos + 1);
       renderBoard();
       return;
     }
-    const b = board();
     if (key === "back") {
-      if (b.editMode === "substitute") {
-        // Overwrite-in-place, not a shift: clearing a box leaves the others where they are. Pad
-        // with spaces first since the cursor may sit past the end of what's actually been typed
-        // (substitute mode lets you click ahead to any of the fixed boxes).
-        const padded = buffer.padEnd(b.wordLength, " ");
-        // Clears whichever box the cursor is over -- the one under it if it's sitting on a real
-        // tile, otherwise (past the last box) the last real one -- then steps back, same as a
-        // normal backspace, so repeated presses walk back through the word clearing as they go.
-        const target = Math.min(cursorPos, b.wordLength - 1);
-        buffer = (
-          padded.slice(0, target) +
-          " " +
-          padded.slice(target + 1)
-        ).replace(/ +$/, "");
-        cursorPos = Math.max(0, cursorPos - 1);
+      if (substitute) {
+        // The cursor sits *before* the box at cursorPos, same as any text caret -- backspace
+        // always clears the box just behind it, never the one it's currently sitting on (that
+        // would read as deleting forward). One rule, no cases.
+        if (cursorPos > 0) {
+          cursorPos -= 1;
+          cells[cursorPos] = "";
+        }
       } else {
-        if (buffer.length === 0) return;
-        // Deletes whichever slot the cursor is over -- the one under it if it's sitting on a real
-        // tile (letter or placeholder box), otherwise (past the last character, on the trailing
-        // underscore) the last real one -- then steps back, same as a normal backspace.
-        const target = Math.min(cursorPos, buffer.length - 1);
-        buffer = buffer.slice(0, target) + buffer.slice(target + 1);
-        cursorPos = Math.max(0, cursorPos - 1);
+        if (cursorPos === 0) return;
+        buffer = buffer.slice(0, cursorPos - 1) + buffer.slice(cursorPos);
+        cursorPos -= 1;
       }
     } else if (/^[a-z]$/.test(key)) {
-      if (b.editMode === "substitute") {
-        // Every row is exactly wordLength boxes -- typing overwrites whichever box the cursor
-        // sits on (there's nowhere for an inserted extra letter to go), capped at that length.
-        // Padded the same way as backspace, for the same reason (cursor may be past buffer.length).
+      if (substitute) {
+        // Any box can be clicked/arrowed to directly and typed into -- this always overwrites
+        // exactly that box, whether it was empty or already held a letter.
         if (cursorPos >= b.wordLength) return;
-        const padded = buffer.padEnd(b.wordLength, " ");
-        buffer = (
-          padded.slice(0, cursorPos) +
-          key +
-          padded.slice(cursorPos + 1)
-        ).replace(/ +$/, "");
-        cursorPos += 1;
-      } else if (buffer[cursorPos] === " ") {
-        // Sitting in an empty placeholder box (created by stepping right past the end) -- fill it
-        // in place rather than inserting another letter and leaving the placeholder behind.
-        buffer = buffer.slice(0, cursorPos) + key + buffer.slice(cursorPos + 1);
-        cursorPos += 1;
-      } else if (buffer.length < 24) {
+        cells[cursorPos] = key;
+        cursorPos = Math.min(b.wordLength, cursorPos + 1);
+      } else {
+        if (buffer.length >= 24) return;
         buffer = buffer.slice(0, cursorPos) + key + buffer.slice(cursorPos);
         cursorPos += 1;
-      } else {
-        return;
       }
-    } else if (key === "space") {
-      // No on-screen arrow keys on mobile, so stepping right past the end to grow a placeholder
-      // (see the "right" handler above) isn't reachable there -- this is the only way to insert
-      // an empty box without an external keyboard, so it always inserts, anywhere in the word.
-      if (b.editMode !== "insert_delete" || buffer.length >= 24) return;
+    } else if (key === " ") {
+      // Only a legal character in insert/delete mode -- substitute mode's boxes hold letters
+      // only, and there's no physical-keyboard spacebar handling wired for substitute games.
+      if (substitute || buffer.length >= 24) return;
       buffer = buffer.slice(0, cursorPos) + " " + buffer.slice(cursorPos);
       cursorPos += 1;
     } else {
@@ -331,7 +336,7 @@ const WordLadder = (() => {
       Net.send("game_action", {
         gameId: gid,
         action: "typing",
-        data: { text: buffer, index: editingIndex },
+        data: { text: rowText(), index: editingIndex },
       });
     }
   }
@@ -389,7 +394,8 @@ const WordLadder = (() => {
       editMode: b.editMode,
       wordLength: b.wordLength,
       editingIndex,
-      current: buffer,
+      cells,
+      buffer,
       cursorPos,
       ghostsByRow: ghostsByRow(),
     });

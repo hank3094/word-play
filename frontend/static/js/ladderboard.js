@@ -5,10 +5,11 @@
 // word and a valid edit from the row above; rows with nothing typed yet don't (nothing to judge).
 // In "substitute" mode every row always shows the full wordLength boxes (length is fixed, so
 // there's nothing to hide); in "insert_delete" mode a row's length isn't fixed, so it shows one
-// full box per letter/inserted-blank actually there, then a trailing underscore marking the next
-// position typing would land on -- that underscore is just where-to-type, not real content, so it
-// never counts as part of the word. Any row, and any letter within it, can be clicked/tapped
-// directly — the green-outlined "cursor" box tracks exactly where typing lands.
+// box per letter actually there, and -- only while the row is completely empty -- a single
+// underscore placeholder hinting where to start typing (it disappears the moment any letter is
+// typed; from then on the caret itself marks where the next letter would land). Any row, and any
+// letter within it, can be clicked/tapped directly — a blinking vertical caret tracks exactly
+// where typing lands.
 const LadderBoard = (() => {
   let root = null;
   let onCellClick = null;
@@ -19,6 +20,8 @@ const LadderBoard = (() => {
   }
 
   // entries: [{word, isWord, isValidEdit}], row 0 always valid (the fixed start word).
+  // cells/buffer: the active row's live content -- cells (one slot per box) in substitute mode,
+  // buffer (a plain string) in insert_delete mode. Only the one matching `editMode` is used.
   // ghostsByRow: {rowIndex: [{text, color}]} -- other sharers' ideas for that row, overlaid
   // beneath whatever's actually there (own letters or the end-word hint), never affecting it.
   function render({
@@ -29,7 +32,8 @@ const LadderBoard = (() => {
     editMode = "substitute",
     wordLength = 5,
     editingIndex = null,
-    current = "",
+    cells = [],
+    buffer = "",
     cursorPos = 0,
     ghostsByRow = {},
   } = {}) {
@@ -47,12 +51,17 @@ const LadderBoard = (() => {
       const isActive = i === editingIndex;
       const isGhostRow =
         status === "playing" && i === totalRows - 1 && !hasContent && !isActive;
-      const text = isActive ? current : hasContent ? stored.word : "";
+      // Substitute mode's boxes are fixed-width, so the active row's content is rendered from
+      // `cells` padded back out to a wordLength string (spaces mark empty boxes); insert/delete
+      // mode just uses `buffer` directly, since it has no fixed width to pad to.
+      const text = isActive
+        ? editMode === "substitute"
+          ? cells.map((c) => c || " ").join("")
+          : buffer
+        : hasContent
+          ? stored.word
+          : "";
       const ghostText = isGhostRow ? endWord : "";
-      // Don't clamp to text.length here -- in substitute mode the caret can sit in any of the
-      // fixed boxes past whatever's actually been typed (clamping it hid the highlight whenever
-      // arrow keys moved past the last typed letter).
-      const cursor = isActive ? Math.max(0, cursorPos) : -1;
       const peerGhosts = ghostsByRow[i] || [];
 
       const rowEl = document.createElement("div");
@@ -65,10 +74,8 @@ const LadderBoard = (() => {
         rowEl.classList.add("invalid-edit");
 
       // Substitute mode: every row is the puzzle's fixed word length, full stop. Insert/delete
-      // mode: real content (letters, or blanks the player explicitly inserted) gets one full box
-      // each -- a peer's longer/shorter guess for the same row is sized in too, so their idea is
-      // still visible over a blank row -- plus one extra trailing underscore slot beyond that,
-      // for the next position typing would land on.
+      // mode: real content gets one full box each -- a peer's longer/shorter guess for the same
+      // row is sized in too, so their idea is still visible over a blank row.
       const longestPeerGhost = peerGhosts.reduce(
         (n, g) => Math.max(n, g.text.length),
         0,
@@ -78,7 +85,13 @@ const LadderBoard = (() => {
         editMode === "substitute"
           ? wordLength
           : Math.max(shown.length, longestPeerGhost);
-      const hasUnderscore = editMode !== "substitute" && !isGhostRow && i !== 0;
+      // Only while insert/delete mode's row is completely empty: a single "type here" hint. The
+      // moment any letter's typed, this disappears and the caret marks the spot instead.
+      const hasUnderscore =
+        editMode !== "substitute" &&
+        !isGhostRow &&
+        i !== 0 &&
+        text.length === 0;
 
       // Row 0 (the fixed start word) and the not-yet-reached end-word ghost row are both given,
       // not the player's to pick directly -- clicking either disabled here; the ghost row stops
@@ -111,7 +124,6 @@ const LadderBoard = (() => {
           tile.appendChild(document.createTextNode(ghostText[c]));
           tile.classList.add("ghost");
         }
-        if (isActive && c === cursor) tile.classList.add("cursor");
         if (clickable) {
           tile.addEventListener("click", (e) => {
             e.stopPropagation();
@@ -121,17 +133,26 @@ const LadderBoard = (() => {
         tilesWrap.appendChild(tile);
       }
       if (hasUnderscore) {
+        // Purely a "type here" hint -- not clickable/cursor-aware itself; the row-level click
+        // fallback below already lands the caret at the right spot for an empty row.
         const underscore = document.createElement("div");
         underscore.className = "tile next-slot";
-        if (isActive && cursor === contentLen)
-          underscore.classList.add("cursor");
-        if (clickable) {
-          underscore.addEventListener("click", (e) => {
-            e.stopPropagation();
-            onCellClick(i, contentLen);
-          });
-        }
         tilesWrap.appendChild(underscore);
+      }
+      if (isActive) {
+        const caret = document.createElement("div");
+        caret.className = "caret";
+        // cursorPos can be contentLen (just past the last box) -- there's no box there to anchor
+        // a left edge to, so anchor to the last real box's column instead and flip to its right
+        // edge rather than its left.
+        const pos = Math.max(0, cursorPos);
+        if (contentLen > 0 && pos >= contentLen) {
+          caret.style.setProperty("--caret-index", contentLen - 1);
+          caret.classList.add("caret-end");
+        } else {
+          caret.style.setProperty("--caret-index", pos);
+        }
+        tilesWrap.appendChild(caret);
       }
 
       // Tick/cross for whether the row's a real word and a valid edit -- absolutely positioned
@@ -149,9 +170,10 @@ const LadderBoard = (() => {
 
       rowEl.appendChild(tilesWrap);
       // Fallback for a tap that lands in the row's padding/gap rather than on a specific tile —
-      // tile clicks above stop propagation, so this only fires when none of them did.
+      // tile clicks above stop propagation, so this only fires when none of them did. Infinity
+      // lets the controller's own clamp decide what "past the end" means for this row's mode.
       if (clickable) {
-        rowEl.addEventListener("click", () => onCellClick(i, contentLen));
+        rowEl.addEventListener("click", () => onCellClick(i, Infinity));
       }
       root.appendChild(rowEl);
     }
