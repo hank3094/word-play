@@ -101,6 +101,14 @@
               🔗
             </button>
             <button
+              id="wordle-grab-btn"
+              class="btn btn-small"
+              aria-label="grab spectator view"
+              title="send to spectator display"
+            >
+              📺
+            </button>
+            <button
               id="game-settings-btn"
               class="btn btn-small"
               aria-label="game settings"
@@ -148,6 +156,14 @@
               title="copy link to this game"
             >
               🔗
+            </button>
+            <button
+              id="hangman-grab-btn"
+              class="btn btn-small"
+              aria-label="grab spectator view"
+              title="send to spectator display"
+            >
+              📺
             </button>
             <button class="btn btn-small activity-toggle-btn" aria-label="activity log">LOG</button>
           </header>
@@ -203,6 +219,14 @@
               title="copy link to this game"
             >
               🔗
+            </button>
+            <button
+              id="wordladder-grab-btn"
+              class="btn btn-small"
+              aria-label="grab spectator view"
+              title="send to spectator display"
+            >
+              📺
             </button>
             <button class="btn btn-small activity-toggle-btn" aria-label="activity log">LOG</button>
           </header>
@@ -435,6 +459,11 @@
             </div>
           </div>
         </div>
+        <!-- ===== SPECTATOR WAITING ===== -->
+        <div id="spectator-waiting" class="spectator-waiting" hidden>
+          <p>Waiting for a game to be displayed…</p>
+        </div>
+
       </main>
 
       <!-- ===== ACTIVITY LOG ===== -->

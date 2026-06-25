@@ -29,8 +29,10 @@ from .redis_client import get_client
 
 PLAYERS_SET = "wp:players"
 GAMES_SET = "wp:games"
+SPECTATOR_KEY = "wp:spectator"
 ALIVE_TTL = 45  # seconds; refreshed on every client message / ping
 GAME_TTL = 6 * 3600  # abandoned games self-expire after a few hours
+SPECTATOR_TTL = 12 * 3600
 FEED_MAX = 30  # keep the last N durable feed events per game
 ACTIVITY_PAGE = 50  # events returned per page
 
@@ -385,8 +387,24 @@ async def list_games() -> list[dict]:
     return out
 
 
+async def get_spectator_game() -> str | None:
+    return await get_client().get(SPECTATOR_KEY)
+
+
+async def set_spectator_game(gid: str | None) -> None:
+    r = get_client()
+    if gid:
+        await r.set(SPECTATOR_KEY, gid, ex=SPECTATOR_TTL)
+    else:
+        await r.delete(SPECTATOR_KEY)
+
+
 async def lobby_snapshot() -> dict:
-    return {"players": await players_snapshot(), "games": await list_games()}
+    return {
+        "players": await players_snapshot(),
+        "games": await list_games(),
+        "spectatorGame": await get_spectator_game(),
+    }
 
 
 # --- archived game review --------------------------------------------------------------------

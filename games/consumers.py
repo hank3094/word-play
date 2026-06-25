@@ -67,6 +67,7 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         self.color = ""
         self.registered = False
         self.current_game: str | None = None
+        self.watched_game: str | None = None
         await self.accept()
         await self.channel_layer.group_add(LOBBY, self.channel_name)
 
@@ -74,6 +75,8 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_discard(LOBBY, self.channel_name)
         if self.current_game:
             await self.channel_layer.group_discard(game_group(self.current_game), self.channel_name)
+        if self.watched_game:
+            await self.channel_layer.group_discard(game_group(self.watched_game), self.channel_name)
         if not self.registered:
             return
         affected = await S.unregister(self.pid)
@@ -97,6 +100,8 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
             "share_start": self._share_start,
             "share_stop": self._share_stop,
             "set_allow_sharing": self._set_allow_sharing,
+            "grab_spectator": self._grab_spectator,
+            "watch_game": self._watch_game,
         }.get(content.get("type"))
         if handler:
             await handler(content)
@@ -169,6 +174,24 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
             self.pid, gid, bool(content.get("allowed"))
         ):
             await self._broadcast_game(gid)
+
+    async def _grab_spectator(self, content):
+        gid = str(content.get("gameId", ""))
+        if gid and gid == self.current_game:
+            await S.set_spectator_game(gid)
+            await self.channel_layer.group_send(LOBBY, {"type": "spectator.update", "gameId": gid})
+
+    async def _watch_game(self, content):
+        gid = str(content.get("gameId", ""))
+        if not gid:
+            return
+        if self.watched_game and self.watched_game != gid:
+            await self.channel_layer.group_discard(game_group(self.watched_game), self.channel_name)
+        self.watched_game = gid
+        await self.channel_layer.group_add(game_group(gid), self.channel_name)
+        snap = await S.game_snapshot(gid)
+        if snap:
+            await self.send_json({"type": "game", "snapshot": snap})
 
     async def _create_game(self, content):
         game_type = str(content.get("gameType", "wordle"))
@@ -364,7 +387,7 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_send(LOBBY, {"type": "lobby.update"})
 
     async def _broadcast_game(self, gid):
-        await self.channel_layer.group_send(game_group(gid), {"type": "game.update"})
+        await self.channel_layer.group_send(game_group(gid), {"type": "game.update", "gid": gid})
 
     async def _broadcast_activity(self, event: dict) -> None:
         stamped = await S.push_activity(event)
@@ -376,8 +399,9 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json({"type": "lobby", **snap})
 
     async def game_update(self, event):
-        if self.current_game:
-            snap = await S.game_snapshot(self.current_game)
+        gid = event.get("gid") or self.current_game
+        if gid:
+            snap = await S.game_snapshot(gid)
             if snap:
                 await self.send_json({"type": "game", "snapshot": snap})
 
@@ -386,6 +410,9 @@ class PlayConsumer(AsyncJsonWebsocketConsumer):
         if ev.get("pid") == self.pid:  # don't echo a player's own typing back to them
             return
         await self.send_json({"type": "feed", "event": ev})
+
+    async def spectator_update(self, event):
+        await self.send_json({"type": "spectator_update", "gameId": event["gameId"]})
 
     async def activity_push(self, event):
         await self.send_json({"type": "activity_event", "event": event["event"]})

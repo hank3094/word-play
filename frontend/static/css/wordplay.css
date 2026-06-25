@@ -1189,3 +1189,146 @@ body {
     transform: rotate(360deg);
   }
 }
+
+/* ===== SPECTATOR / TV MODE ===== */
+/* Accessed at /spectate — full-screen 16:9, optimised for 4K TV display.
+   body.spectator-mode is added by app.js when the path starts with /spectate. */
+
+.spectator-waiting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 1.6rem;
+  opacity: 0.5;
+  text-align: center;
+}
+
+body.spectator-mode .frame {
+  padding: 0;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+body.spectator-mode .screen {
+  width: calc(100vw - 260px);
+  max-width: none;
+  height: 100vh;
+  max-height: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* Game view fills the full screen area with extra breathing room. */
+body.spectator-mode .view.is-active {
+  padding: 24px 36px;
+}
+
+/* Game header: larger text, hide interactive buttons. */
+body.spectator-mode .game-head {
+  font-size: 1.3rem;
+  gap: 12px;
+}
+body.spectator-mode [data-nav="leave"],
+body.spectator-mode [data-nav="delete"],
+body.spectator-mode #game-settings-btn,
+body.spectator-mode .activity-toggle-btn,
+body.spectator-mode #wordle-grab-btn,
+body.spectator-mode #hangman-grab-btn,
+body.spectator-mode #wordladder-grab-btn,
+body.spectator-mode #game-link-btn,
+body.spectator-mode #hangman-link-btn,
+body.spectator-mode #wordladder-link-btn {
+  display: none !important;
+}
+body.spectator-mode .game-controls,
+body.spectator-mode .keyboard {
+  display: none !important;
+}
+
+/* Player names and status: scale up. */
+body.spectator-mode .game-players {
+  font-size: 1.2rem;
+}
+body.spectator-mode .game-status {
+  font-size: 1.2rem;
+}
+
+/* Wordle board: tiles scale up for TV. The board is size-constrained by the .board CSS vars
+   (--rows/--cols * 62px per tile). On a 4K TV at 100% zoom the tile formula runs large naturally;
+   bump the base tile unit by overriding the height/max-width formula. */
+body.spectator-mode .board {
+  height: min(calc(var(--rows, 6) * 96px), 88cqh);
+  max-width: min(calc(var(--cols, 5) * 96px), 92cqw);
+}
+body.spectator-mode .tile {
+  font-size: clamp(1.8rem, 5vw, 3.5rem);
+  border-radius: 10px;
+  border-width: 3px;
+}
+
+/* Hangman: larger SVG and word display. */
+body.spectator-mode .hangman-figure {
+  height: min(55vh, 400px);
+}
+body.spectator-mode .hangman-word {
+  font-size: clamp(2rem, 6vw, 4rem);
+  letter-spacing: 8px;
+}
+
+/* Word ladder tiles. */
+body.spectator-mode .ladder-row-tiles {
+  --ladder-tile: clamp(52px, 7vw, 80px);
+}
+
+/* Feed row: make it visible but not distracting. */
+body.spectator-mode .feed {
+  font-size: 1.1rem;
+  max-height: 80px;
+}
+
+/* Activity panel: always pinned right, compact, no close/resize controls. */
+body.spectator-mode #activity-panel,
+body.spectator-mode #activity-panel.is-collapsed {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: auto;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  overflow: hidden;
+}
+body.spectator-mode #panel-resizer {
+  display: none;
+}
+body.spectator-mode .activity-close {
+  display: none !important;
+}
+body.spectator-mode .activity-head {
+  padding: 10px 12px 6px;
+}
+body.spectator-mode .activity-head-row {
+  justify-content: flex-start;
+}
+body.spectator-mode .panel-h {
+  font-size: 0.9rem;
+}
+body.spectator-mode .aev {
+  font-size: 0.85rem;
+}
+
+/* While waiting (no game grabbed yet), hide the lobby view and show the waiting overlay. */
+body.spectator-mode #lobby.is-active {
+  display: none;
+}
+body.spectator-mode .spectator-waiting:not([hidden]) {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  z-index: 10;
+}

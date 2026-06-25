@@ -4,6 +4,9 @@
   const views = {};
   document.querySelectorAll(".view").forEach((v) => (views[v.id] = v));
 
+  const isSpectatorMode = location.pathname.startsWith("/spectate");
+  if (isSpectatorMode) document.body.classList.add("spectator-mode");
+
   const NAME_KEY = "wp-name";
   const COLOR_KEY = "wp-color";
   const PLAYER_COLORS = [
@@ -113,6 +116,12 @@
     document.getElementById("you-name").textContent = name;
     Net.connect(name, storedColor());
     refreshHistory();
+    if (isSpectatorMode) {
+      show("lobby"); // deactivates name-entry; CSS hides lobby content in spectator mode
+      const waiting = document.getElementById("spectator-waiting");
+      if (waiting) waiting.hidden = false;
+      return;
+    }
     show("lobby");
     // A shared /g/<gameId> link: open straight into that game once connected. Net.send queues
     // this until the socket is up (the same disconnected-queue path used for reconnect replays).
@@ -493,6 +502,16 @@
     });
   }
 
+  // ---- spectator grab button ----
+  function wireGrabButton(btnId, getGid) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      const gid = getGid();
+      if (gid) Net.send("grab_spectator", { gameId: gid });
+    });
+  }
+
   // ---- copy-link button ----
   function wireGameLinkButton(btnId) {
     const btn = document.getElementById(btnId);
@@ -536,6 +555,7 @@
     });
     wireGameSettingsModal();
     wireGameLinkButton("game-link-btn");
+    wireGrabButton("wordle-grab-btn", () => Wordle.currentGame());
 
     document.getElementById("wordle-game").addEventListener("click", (e) => {
       if (e.target.closest('[data-nav="leave"]')) {
@@ -567,6 +587,7 @@
       keyboard,
     });
     wireGameLinkButton("hangman-link-btn");
+    wireGrabButton("hangman-grab-btn", () => Hangman.currentGame());
 
     document.getElementById("hangman-game").addEventListener("click", (e) => {
       if (e.target.closest('[data-nav="leave"]')) {
@@ -599,6 +620,7 @@
       keyboard,
     });
     wireGameLinkButton("wordladder-link-btn");
+    wireGrabButton("wordladder-grab-btn", () => WordLadder.currentGame());
 
     document
       .getElementById("wordladder-game")
@@ -642,6 +664,16 @@
     );
   }
 
+  // ---- spectator state ----
+  let watchedGid = null;
+  function spectatorWatch(gid) {
+    if (!gid || gid === watchedGid) return;
+    watchedGid = gid;
+    Net.send("watch_game", { gameId: gid });
+    const waiting = document.getElementById("spectator-waiting");
+    if (waiting) waiting.hidden = true;
+  }
+
   // ---- websocket message handlers ----
   function wireNet() {
     Net.setStatusCb((s) => {
@@ -660,6 +692,7 @@
       Wordle.setMyId(m.id);
       Hangman.setMyId(m.id);
       WordLadder.setMyId(m.id);
+      if (isSpectatorMode) return; // spectator re-watches via the lobby message's spectatorGame
       // If the socket dropped while we were in a game, rejoin it after reconnecting so the server
       // re-associates us (a fresh connection starts with no current game).
       const gv = activeGameType && GAME_VIEWS[activeGameType];
@@ -672,20 +705,26 @@
     Net.on("lobby", (m) => {
       Lobby.renderPlayers(m.players);
       Lobby.renderGames(m.games);
+      if (isSpectatorMode && m.spectatorGame) spectatorWatch(m.spectatorGame);
     });
 
     Net.on("game", (m) => {
       const snap = m.snapshot;
       const gv = GAME_VIEWS[snap.gameType];
       if (!gv) return; // unknown game type — defensive no-op
-      closeNewGameModal(); // we successfully created/entered a game
+      if (!isSpectatorMode) {
+        closeNewGameModal(); // we successfully created/entered a game
+      } else {
+        const waiting = document.getElementById("spectator-waiting");
+        if (waiting) waiting.hidden = true;
+      }
       activeGameType = snap.gameType;
       // Entering a game (or already in it): make sure the game view is showing.
       if (gv.controller.currentGame() !== snap.id) gv.controller.open(snap.id);
       if (!views[gv.viewId].classList.contains("is-active")) show(gv.viewId);
       gv.controller.applySnapshot(snap);
       Activity.setCurrentGame(snap.id);
-      setGameUrl(snap.id);
+      if (!isSpectatorMode) setGameUrl(snap.id);
       if (snap.status !== "playing") refreshHistory();
     });
 
@@ -711,19 +750,30 @@
       setGameUrl(null);
       show("lobby");
     });
+    Net.on("spectator_update", (m) => {
+      if (isSpectatorMode) spectatorWatch(m.gameId);
+    });
+
     // The owner deleted a game we were in — bounce back to the lobby.
     Net.on("game_closed", () => {
       if (activeController()) activeController().reset();
       activeGameType = null;
       Activity.setCurrentGame(null);
-      setGameUrl(null);
-      show("lobby");
+      if (isSpectatorMode) {
+        watchedGid = null;
+        const waiting = document.getElementById("spectator-waiting");
+        if (waiting) waiting.hidden = false;
+      } else {
+        setGameUrl(null);
+        show("lobby");
+      }
     });
   }
 
   // ---- physical keyboard ----
   function wireKeyboard() {
     window.addEventListener("keydown", (e) => {
+      if (isSpectatorMode) return;
       const gv = activeGameType && GAME_VIEWS[activeGameType];
       if (!gv || !views[gv.viewId].classList.contains("is-active")) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
