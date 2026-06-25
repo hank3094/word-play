@@ -52,6 +52,7 @@
                 <b id="you-name">PLAYER</b> ✎
               </button>
             </div>
+            <a href="/spectate" target="_blank" class="btn btn-small" title="open spectator view on a TV or second screen">📺 SPECTATE</a>
             <button class="btn btn-small activity-toggle-btn" aria-label="activity log">LOG</button>
           </header>
 
@@ -101,14 +102,6 @@
               🔗
             </button>
             <button
-              id="wordle-grab-btn"
-              class="btn btn-small"
-              aria-label="grab spectator view"
-              title="send to spectator display"
-            >
-              📺
-            </button>
-            <button
               id="game-settings-btn"
               class="btn btn-small"
               aria-label="game settings"
@@ -123,6 +116,9 @@
           <div class="game-controls">
             <button id="share-toggle-btn" class="btn btn-small share-toggle-btn" hidden>
               📡 SHARING OFF
+            </button>
+            <button id="wordle-grab-btn" class="btn btn-small" title="send to spectator display">
+              📺 SPECTATOR
             </button>
           </div>
 
@@ -157,16 +153,14 @@
             >
               🔗
             </button>
-            <button
-              id="hangman-grab-btn"
-              class="btn btn-small"
-              aria-label="grab spectator view"
-              title="send to spectator display"
-            >
-              📺
-            </button>
             <button class="btn btn-small activity-toggle-btn" aria-label="activity log">LOG</button>
           </header>
+
+          <div class="game-controls">
+            <button id="hangman-grab-btn" class="btn btn-small" title="send to spectator display">
+              📺 SPECTATOR
+            </button>
+          </div>
 
           <div class="hangman-wrap">
             <!-- Slightly wobbly curves (not perfectly straight lines) for a hand-drawn look;
@@ -220,14 +214,6 @@
             >
               🔗
             </button>
-            <button
-              id="wordladder-grab-btn"
-              class="btn btn-small"
-              aria-label="grab spectator view"
-              title="send to spectator display"
-            >
-              📺
-            </button>
             <button class="btn btn-small activity-toggle-btn" aria-label="activity log">LOG</button>
           </header>
 
@@ -237,6 +223,9 @@
             </button>
             <button id="wordladder-solution-btn" class="btn btn-small" hidden>
               💡 SHOW SOLUTION
+            </button>
+            <button id="wordladder-grab-btn" class="btn btn-small" title="send to spectator display">
+              📺 SPECTATOR
             </button>
           </div>
 
