@@ -666,6 +666,7 @@
 
   // ---- spectator state ----
   let watchedGid = null;
+  let myId = null; // set on welcome; used to inject spectator into snap.sharers
   function spectatorWatch(gid) {
     if (!gid || gid === watchedGid) return;
     watchedGid = gid;
@@ -679,6 +680,9 @@
     Net.setStatusCb((s) => {
       const el = document.getElementById("lobby-status");
       if (el) el.textContent = s === "connected" ? "" : s;
+      // When the socket drops, clear watchedGid so the lobby message on reconnect re-sends
+      // watch_game (the new socket is not in the game's channel group).
+      if (s !== "connected" && isSpectatorMode) watchedGid = null;
     });
 
     // Spinner shown only while an action fired during a disconnect waits to execute.
@@ -688,6 +692,7 @@
     });
 
     Net.on("welcome", (m) => {
+      myId = m.id;
       Lobby.setMyId(m.id);
       Wordle.setMyId(m.id);
       Hangman.setMyId(m.id);
@@ -709,7 +714,7 @@
     });
 
     Net.on("game", (m) => {
-      const snap = m.snapshot;
+      let snap = m.snapshot;
       const gv = GAME_VIEWS[snap.gameType];
       if (!gv) return; // unknown game type — defensive no-op
       if (!isSpectatorMode) {
@@ -717,6 +722,11 @@
       } else {
         const waiting = document.getElementById("spectator-waiting");
         if (waiting) waiting.hidden = true;
+        // Spectator is always "sharing" for display purposes — injects own id into sharers so
+        // game controllers show live typing overlays without actually being in blob["players"].
+        if (myId && !(snap.sharers || []).includes(myId)) {
+          snap = { ...snap, sharers: [...(snap.sharers || []), myId] };
+        }
       }
       activeGameType = snap.gameType;
       // Entering a game (or already in it): make sure the game view is showing.
@@ -817,6 +827,14 @@
       }
     });
   }
+
+  // ---- keep-alive: fire a ping when a backgrounded tab comes back into view ----
+  // Browser timers slow down (or stop entirely) on backgrounded tabs, which can let the 45-second
+  // server-side presence TTL expire before the 20-second ping fires. Sending one immediately on
+  // visibility restore closes that gap without changing the normal ping cadence.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) Net.send("ping");
+  });
 
   // ---- boot ----
   wireNameEntry();
